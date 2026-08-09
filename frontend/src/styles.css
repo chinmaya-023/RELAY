@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root { color: #dce9fa; background: #06172d; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  body { @apply min-h-screen bg-[#06172d] text-slate-100 antialiased; }
+  button, input, textarea, select { font: inherit; }
+}
+
+@layer components {
+  .panel { @apply rounded-2xl border border-white/10 bg-white/[0.045] shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur; }
+  .btn { @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-relay-400 focus:ring-offset-2 focus:ring-offset-[#06172d] disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-relay-500 text-white hover:bg-relay-400; }
+  .btn-secondary { @apply btn border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10; }
+  .field { @apply mt-1 w-full rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-relay-400 focus:ring-1 focus:ring-relay-400; }
+  .label { @apply text-xs font-semibold uppercase tracking-[0.12em] text-slate-400; }
+  .status { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold; }
+  .monitoring-intro { @apply flex flex-col justify-between gap-4 rounded-2xl border border-relay-300/20 bg-[linear-gradient(135deg,rgba(14,165,233,0.14),rgba(15,23,42,0.28))] p-5 lg:flex-row lg:items-center; }
+}
