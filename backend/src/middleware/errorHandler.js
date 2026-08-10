@@ -2,7 +2,7 @@ import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
-export const notFoundHandler = (request, _response, next) => next(new AppError(404, 'ROUTE_NOT_FOUND', `Route ${request.method} ${request.path} was not found.`));
+export const notFoundHandler = (_request, response) => response.status(404).json({ message: 'Route not found.' });
 
 export const errorHandler = (error, request, response, _next) => {
   const normalized = error instanceof ZodError
