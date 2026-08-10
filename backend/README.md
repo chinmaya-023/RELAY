@@ -1,5 +1,16 @@
 # Relay API and gateway
 
+## Run this service independently
+
+```powershell
+cd backend
+npm install
+npm run dev     # development with automatic restart
+npm run start   # production
+```
+
+Set the values from `.env.example` in `backend/.env`. In production, set `CLIENT_ORIGINS` to the exact frontend deployment URL and deploy this service behind HTTPS. Both `/api/*` and public gateway routes at `/p/:projectId/*` are served by this backend.
+
 ## Control-plane API
 
 Authenticated API routes live under `/api`. Firebase ID tokens use `Authorization: Bearer <token>`. Machine clients can use `X-Relay-API-Key: relay_…`; scoped keys are limited to the project they were created for.
@@ -9,7 +20,7 @@ Authenticated API routes live under `/api`. Firebase ID tokens use `Authorizatio
 - `/api/backends/:id/monitor` — health and keep-alive policy
 - `/api/projects/:id/gateway` — gateway enablement and in-memory rate-limit policy
 - `/api/projects/:id/failover` — conservative health-driven routing policy
-- `/api/projects/:id/{usage,alerts,logs,events}` — operational data
+- `/api/projects/:id/{alerts,logs,events}` — operational data
 - `/api/api-keys` — create, list, and revoke scoped API keys
 
 All versioned resources return deterministic ETags and honor `If-None-Match` with `304 Not Modified`.

@@ -89,13 +89,13 @@ export class FirebaseRepository {
   async addBackend(projectId, input) {
     const id = identifier('bkd');
     const timestamp = now();
-    const backend = { id, projectId, name: input.name, originUrl: input.originUrl, healthPath: input.healthPath ?? '/health', provider: input.provider ?? 'custom', role: input.role ?? 'PRIMARY', originAuthHeader: input.originAuthHeader ?? null, createdAt: timestamp, updatedAt: timestamp, version: 1 };
-    const monitor = { backendId: id, enabled: false, intervalSeconds: 300, timeoutSeconds: 10, maxAttempts: 3, retryDelaySeconds: 5, failureThreshold: 3, recoveryThreshold: 2, keepAliveEnabled: false, version: 1, updatedAt: timestamp };
+    const backend = { id, projectId, name: input.name, originUrl: input.originUrl, healthPath: input.healthPath ?? '/health', role: input.role ?? 'PRIMARY', originAuthHeader: input.originAuthHeader ?? null, createdAt: timestamp, updatedAt: timestamp, version: 1 };
+    const monitor = { backendId: id, enabled: false, intervalSeconds: 600, timeoutSeconds: 10, maxAttempts: 5, retryDelaySeconds: 120, failureThreshold: 1, recoveryThreshold: 2, keepAliveEnabled: false, version: 1, updatedAt: timestamp };
     await this.update({
       [`backends/${id}`]: backend,
       [`monitors/${id}`]: monitor,
       [`health/${id}`]: { backendId: id, status: 'UNKNOWN', consecutiveFailures: 0, consecutiveSuccesses: 0, updatedAt: timestamp, version: 1 },
-      [projectBackendIndexPath(projectId, id)]: { name: backend.name, role: backend.role, provider: backend.provider, version: 1, updatedAt: timestamp }
+      [projectBackendIndexPath(projectId, id)]: { name: backend.name, role: backend.role, version: 1, updatedAt: timestamp }
     });
     return backend;
   }
@@ -107,7 +107,7 @@ export class FirebaseRepository {
     const next = { ...backend, ...input, updatedAt: timestamp, version: backend.version + 1 };
     await this.update({
       [`backends/${backendId}`]: next,
-      [projectBackendIndexPath(backend.projectId, backendId)]: { name: next.name, role: next.role, provider: next.provider, version: next.version, updatedAt: timestamp }
+      [projectBackendIndexPath(backend.projectId, backendId)]: { name: next.name, role: next.role, version: next.version, updatedAt: timestamp }
     });
     return next;
   }
@@ -179,6 +179,11 @@ export class FirebaseRepository {
   async listEvents(projectId, limit = 50) {
     const events = (await this.get(`events/${projectId}`)) ?? {};
     return Object.values(events).sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+  }
+
+  async listAllProjects() {
+    const projects = (await this.get('projects')) ?? {};
+    return Object.values(projects).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   async createNotification(projectId, notification) {

@@ -39,3 +39,11 @@ export const requireScope = (scope) => (request, _response, next) => {
 export const requireInteractiveAuth = (request, _response, next) => request.authType === 'firebase' || request.authType === 'local'
   ? next()
   : next(new AppError(403, 'INTERACTIVE_AUTH_REQUIRED', 'API key management requires Firebase Authentication.'));
+
+export const requireRelayAdmin = (request, _response, next) => {
+  if (request.authType !== 'firebase') return next(new AppError(403, 'RELAY_ADMIN_REQUIRED', 'A Relay owner account is required.'));
+  if (!request.user.email || !env.adminEmails.includes(request.user.email.toLowerCase())) {
+    return next(new AppError(403, 'RELAY_ADMIN_REQUIRED', 'This account does not have Relay owner access.'));
+  }
+  return next();
+};

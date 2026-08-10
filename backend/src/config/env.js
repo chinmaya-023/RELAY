@@ -11,6 +11,7 @@ const asInteger = (value, fallback) => {
 };
 
 const asOrigins = (value) => value.split(',').map((origin) => origin.trim().replace(/\/$/, '')).filter(Boolean);
+const asEmails = (value) => value.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
 
 export const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -18,6 +19,7 @@ export const env = Object.freeze({
   clientOrigins: asOrigins(process.env.CLIENT_ORIGINS ?? process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'),
   allowLocalAuth: process.env.RELAY_ALLOW_LOCAL_AUTH === 'true',
   localUserId: process.env.RELAY_LOCAL_USER_ID ?? '',
+  adminEmails: asEmails(process.env.RELAY_ADMIN_EMAILS ?? ''),
   gatewaySigningSecret: process.env.RELAY_GATEWAY_SIGNING_SECRET ?? '',
   apiKeyPepper: process.env.RELAY_API_KEY_PEPPER ?? '',
   apiRateLimit: {

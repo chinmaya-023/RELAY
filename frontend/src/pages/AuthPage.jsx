@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GoogleAuthProvider, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, updateProfile } from 'firebase/auth';
 import { authActionSettings, firebaseAuth } from '../firebase.js';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { authMessage } from '../auth/messages.js';
@@ -9,47 +9,18 @@ const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
 
 export const AuthPage = ({ register = false }) => {
-  const navigate = useNavigate();
-  const { firebaseConfigured, authIssue, clearAuthIssue } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [working, setWorking] = useState(false);
-
+  const navigate = useNavigate(); const { firebaseConfigured, authIssue, clearAuthIssue } = useAuth();
+  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [working, setWorking] = useState(false);
   const submit = async (event) => {
     event.preventDefault();
-    if (register && (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH)) {
-      setError(`Use a password between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`);
-      return;
-    }
+    if (register && (!name.trim() || password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH)) { setError(`Enter your name and use a password between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`); return; }
     setWorking(true); setError(''); clearAuthIssue();
     try {
-      if (register) {
-        const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
-        await sendEmailVerification(credential.user, authActionSettings);
-      } else {
-        await signInWithEmailAndPassword(firebaseAuth, email, password);
-      }
+      if (register) { const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password); await updateProfile(credential.user, { displayName: name.trim() }); await sendEmailVerification(credential.user, authActionSettings); }
+      else await signInWithEmailAndPassword(firebaseAuth, email, password);
       navigate('/dashboard');
-    } catch (reason) {
-      setError(authMessage(reason, register ? 'We could not create your account. Please review your details and try again.' : 'We could not sign you in. Check your email and password, then try again.'));
-    } finally { setWorking(false); }
+    } catch (reason) { setError(authMessage(reason, register ? 'We could not create your account. Please review your details and try again.' : 'We could not sign you in. Check your email and password, then try again.')); } finally { setWorking(false); }
   };
-
-  const signInWithGoogle = async () => {
-    setWorking(true); setError(''); clearAuthIssue();
-    try {
-      const provider = new GoogleAuthProvider();
-      try { await signInWithPopup(firebaseAuth, provider); }
-      catch (reason) {
-        if (reason.code !== 'auth/popup-blocked') throw reason;
-        await signInWithRedirect(firebaseAuth, provider);
-        return;
-      }
-      navigate('/dashboard');
-    } catch (reason) { setError(authMessage(reason, 'Google sign-in could not be completed. Please try again.')); }
-    finally { setWorking(false); }
-  };
-
-  return <div className="grid min-h-screen place-items-center bg-[radial-gradient(ellipse_at_top,_rgba(28,125,242,0.24),_transparent_45%),#06172d] px-5"><section className="w-full max-w-md panel p-7 sm:p-9"><div className="flex items-center gap-2 text-xl font-semibold"><span className="grid h-9 w-9 place-items-center rounded-lg bg-relay-500">R</span>Relay</div><h1 className="mt-8 text-2xl font-semibold tracking-tight">{register ? 'Create your Relay workspace' : 'Welcome back'}</h1><p className="mt-2 text-sm leading-6 text-slate-400">{register ? 'Use a work email to create a secure reliability workspace.' : 'Sign in to manage your Relay projects and gateway policies.'}</p>{!firebaseConfigured ? <div className="mt-6 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">Add the Firebase values to <code>frontend/.env</code> to enable authentication.</div> : <><form className="mt-7 space-y-5" onSubmit={submit}><label className="block"><span className="label">Email address</span><input className="field" autoComplete="email" type="email" maxLength="254" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label className="block"><span className="label">Password</span><input className="field" autoComplete={register ? 'new-password' : 'current-password'} type="password" minLength={register ? PASSWORD_MIN_LENGTH : 1} maxLength={PASSWORD_MAX_LENGTH} value={password} onChange={(event) => setPassword(event.target.value)} required />{register && <span className="mt-2 block text-xs text-slate-500">Use {PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH} characters. Your Firebase password policy may require more.</span>}</label>{!register && <div className="text-right"><Link className="text-sm font-medium text-relay-400 hover:text-relay-300" to="/forgot-password">Forgot password?</Link></div>}{(error || authIssue) && <p className="text-sm text-rose-200" role="alert">{error || authIssue}</p>}<button className="btn-primary w-full" disabled={working}>{working ? 'Please wait…' : register ? 'Create account' : 'Sign in'}</button></form><div className="my-6 flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div><button className="btn-secondary w-full" onClick={signInWithGoogle} disabled={working}>Continue with Google</button></>}<p className="mt-6 text-center text-sm text-slate-400">{register ? 'Already have an account?' : 'New to Relay?'} <Link className="font-semibold text-relay-400 hover:text-relay-300" to={register ? '/login' : '/register'}>{register ? 'Sign in' : 'Create an account'}</Link></p></section></div>;
+  const signInWithGoogle = async () => { setWorking(true); setError(''); clearAuthIssue(); try { const provider = new GoogleAuthProvider(); try { await signInWithPopup(firebaseAuth, provider); } catch (reason) { if (reason.code !== 'auth/popup-blocked') throw reason; await signInWithRedirect(firebaseAuth, provider); return; } navigate('/dashboard'); } catch (reason) { setError(authMessage(reason, 'Google sign-in could not be completed. Please try again.')); } finally { setWorking(false); } };
+  return <div className="grid min-h-screen place-items-center bg-[radial-gradient(ellipse_at_top,_rgba(28,125,242,0.24),_transparent_45%),#06172d] px-5"><section className="w-full max-w-md panel p-7 sm:p-9"><div className="flex items-center gap-2 text-xl font-semibold"><span className="grid h-9 w-9 place-items-center rounded-lg bg-relay-500">R</span>Relay</div><h1 className="mt-8 text-2xl font-semibold tracking-tight">{register ? 'Create your Relay workspace' : 'Welcome back'}</h1><p className="mt-2 text-sm leading-6 text-slate-400">{register ? 'Use a work email to create a secure reliability workspace.' : 'Sign in to manage your Relay projects and gateway policies.'}</p>{!firebaseConfigured ? <div className="mt-6 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">Add the Firebase values to <code>frontend/.env</code> to enable authentication.</div> : <><form className="mt-7 space-y-5" onSubmit={submit}>{register && <label className="block"><span className="label">Full name</span><input className="field" autoComplete="name" maxLength="80" value={name} onChange={(event) => setName(event.target.value)} required /></label>}<label className="block"><span className="label">Email address</span><input className="field" autoComplete="email" type="email" maxLength="254" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label className="block"><span className="label">Password</span><input className="field" autoComplete={register ? 'new-password' : 'current-password'} type="password" minLength={register ? PASSWORD_MIN_LENGTH : 1} maxLength={PASSWORD_MAX_LENGTH} value={password} onChange={(event) => setPassword(event.target.value)} required />{register && <span className="mt-2 block text-xs text-slate-500">Use {PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH} characters. Your Firebase password policy may require more.</span>}</label>{!register && <div className="text-right"><Link className="text-sm font-medium text-relay-400 hover:text-relay-300" to="/forgot-password">Forgot password?</Link></div>}{(error || authIssue) && <p className="text-sm text-rose-200" role="alert">{error || authIssue}</p>}<button className="btn-primary w-full" disabled={working}>{working ? 'Please wait…' : register ? 'Create account' : 'Sign in'}</button></form><div className="my-6 flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-white/10" />or<span className="h-px flex-1 bg-white/10" /></div><button className="btn-secondary w-full" onClick={signInWithGoogle} disabled={working}>Continue with Google</button></>}<p className="mt-6 text-center text-sm text-slate-400">{register ? 'Already have an account?' : 'New to Relay?'} <Link className="font-semibold text-relay-400 hover:text-relay-300" to={register ? '/login' : '/register'}>{register ? 'Sign in' : 'Create an account'}</Link></p></section></div>;
 };

@@ -15,10 +15,12 @@ import { createProjectRouter } from './routes/projects.js';
 import { createBackendRouter } from './routes/backends.js';
 import { createMonitoringRouter } from './routes/monitoring.js';
 import { createConfigurationRouter } from './routes/configuration.js';
-import { createUsageRouter } from './routes/usage.js';
+import { createEventRouter } from './routes/events.js';
 import { createDashboardRouter } from './routes/dashboard.js';
 import { ApiKeyService } from './services/apiKeyService.js';
 import { createApiKeyRouter } from './routes/apiKeys.js';
+import { AdminService } from './services/adminService.js';
+import { createAdminRouter } from './routes/admin.js';
 import { createGatewayHandler } from './gateway/gatewayHandler.js';
 import { createRateLimitMiddleware, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
 
@@ -32,6 +34,7 @@ export const createApp = (dependencies = {}) => {
   const apiRateLimiter = dependencies.apiRateLimiter ?? new MemoryRateLimiter();
   const authenticatedApiRateLimiter = dependencies.authenticatedApiRateLimiter ?? new MemoryRateLimiter();
   const apiKeyService = dependencies.apiKeyService ?? new ApiKeyService(repository);
+  const adminService = dependencies.adminService ?? new AdminService(repository);
   const app = express();
 
   app.disable('x-powered-by');
@@ -67,11 +70,12 @@ export const createApp = (dependencies = {}) => {
   app.use('/api', createBackendRouter({ repository, resources, monitoringService }));
   app.use('/api', createMonitoringRouter({ repository, resources }));
   app.use('/api', createConfigurationRouter({ repository, resources, failoverService }));
-  app.use('/api', createUsageRouter({ repository, resources }));
+  app.use('/api', createEventRouter({ repository, resources }));
   app.use('/api/api-keys', createApiKeyRouter({ repository, apiKeyService }));
+  app.use('/api/admin', createAdminRouter({ adminService }));
   app.use('/p/:projectId', createGatewayHandler({ resources, failoverService, rateLimiter }));
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService } };
+  return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService } };
 };

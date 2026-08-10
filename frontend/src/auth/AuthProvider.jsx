@@ -24,6 +24,7 @@ export const AuthProvider = ({ children }) => {
   const refreshUser = async () => {
     if (!firebaseAuth?.currentUser) return null;
     await reload(firebaseAuth.currentUser);
+    await firebaseAuth.currentUser.getIdToken(true);
     setUser(firebaseAuth.currentUser);
     setRevision((value) => value + 1);
     return firebaseAuth.currentUser;
