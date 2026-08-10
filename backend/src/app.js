@@ -79,3 +79,5 @@ export const createApp = (dependencies = {}) => {
 
   return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService } };
 };
+
+export default createApp().app;
