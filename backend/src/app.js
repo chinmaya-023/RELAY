@@ -55,6 +55,7 @@ export const createApp = (dependencies = {}) => {
     credentials: false,
     maxAge: 600
   }));
+  app.get(['/', '/health'], (_request, response) => response.json({ status: 'ok', message: 'RELAY SERVER' }));
   app.get('/healthz', (_request, response) => response.json({ success: true, data: { service: 'relay-api', firebaseConfigured: hasFirebaseConfiguration } }));
   app.get('/api/status', (_request, response) => response.json({ success: true, data: { firebaseConfigured: hasFirebaseConfiguration, authentication: 'firebase' } }));
 

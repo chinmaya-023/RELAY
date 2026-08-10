@@ -16,3 +16,5 @@ VITE_API_BASE_URL=https://api.example.com
 ```
 
 The host must serve `dist/` as a single-page application and rewrite unknown application paths to `index.html`, so direct links such as `/projects/:projectId/monitoring` continue to work.
+
+For Vercel, this is already configured in `vercel.json`. Set the Vercel project Root Directory to `frontend`.
