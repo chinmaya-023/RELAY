@@ -14,11 +14,6 @@ export const createRequireAuth = (apiKeyService) => async (request, _response, n
       request.authType = 'api_key';
       return next();
     }
-    if (env.allowLocalAuth && env.nodeEnv === 'development' && env.localUserId) {
-      request.user = { uid: env.localUserId, local: true };
-      request.authType = 'local';
-      return next();
-    }
     const token = request.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token) throw new AppError(401, 'AUTH_REQUIRED', 'A Firebase ID token is required.');
     request.user = await getAuth().verifyIdToken(token);
@@ -36,7 +31,7 @@ export const requireScope = (scope) => (request, _response, next) => {
   return next(new AppError(403, 'API_KEY_SCOPE_DENIED', `This API key requires the ${scope} scope.`));
 };
 
-export const requireInteractiveAuth = (request, _response, next) => request.authType === 'firebase' || request.authType === 'local'
+export const requireInteractiveAuth = (request, _response, next) => request.authType === 'firebase'
   ? next()
   : next(new AppError(403, 'INTERACTIVE_AUTH_REQUIRED', 'API key management requires Firebase Authentication.'));
 

@@ -17,8 +17,6 @@ export const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: asInteger(process.env.PORT, 4000),
   clientOrigins: asOrigins(process.env.CLIENT_ORIGINS ?? process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'),
-  allowLocalAuth: process.env.RELAY_ALLOW_LOCAL_AUTH === 'true',
-  localUserId: process.env.RELAY_LOCAL_USER_ID ?? '',
   adminEmails: asEmails(process.env.RELAY_ADMIN_EMAILS ?? ''),
   gatewaySigningSecret: process.env.RELAY_GATEWAY_SIGNING_SECRET ?? '',
   apiKeyPepper: process.env.RELAY_API_KEY_PEPPER ?? '',
@@ -39,9 +37,3 @@ export const env = Object.freeze({
 export const hasFirebaseConfiguration = Boolean(env.firebase.projectId && env.firebase.databaseURL);
 export const hasFirebaseTriggerEmailConfiguration = Boolean(hasFirebaseConfiguration && env.firebase.triggerEmailEnabled && env.firebase.triggerEmailCollection);
 
-export const assertSafeDevelopmentAuth = () => {
-  if (!env.allowLocalAuth) return;
-  if (env.nodeEnv !== 'development' || !env.localUserId) {
-    throw new Error('RELAY_ALLOW_LOCAL_AUTH requires NODE_ENV=development and RELAY_LOCAL_USER_ID.');
-  }
-};

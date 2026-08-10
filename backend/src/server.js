@@ -1,9 +1,8 @@
 import { createApp } from './app.js';
-import { assertSafeDevelopmentAuth, env, hasFirebaseConfiguration } from './config/env.js';
+import { env, hasFirebaseConfiguration } from './config/env.js';
 import { MonitoringScheduler } from './services/scheduler.js';
 import { logger } from './lib/logger.js';
 
-assertSafeDevelopmentAuth();
 const { app, services } = createApp();
 const scheduler = hasFirebaseConfiguration ? new MonitoringScheduler(services.repository, services.monitoringService) : null;
 const server = app.listen(env.port, () => {
