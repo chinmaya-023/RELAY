@@ -3,15 +3,15 @@ export const GATEWAY_BASE_URL = API_BASE_URL;
 const storedResponses = new Map();
 
 export class ApiError extends Error {
-  constructor(message, status, code, requestId) { super(message); this.status = status; this.code = code; this.requestId = requestId; }
+  constructor(message, status, code, requestId, details) { super(message); this.status = status; this.code = code; this.requestId = requestId; this.details = details; }
 }
 
 export const createApiClient = (getToken) => {
-  const request = async (path, options = {}) => {
+  const request = async (path, options = {}, refreshedToken = false) => {
     const method = options.method ?? 'GET';
     const url = `${API_BASE_URL}${path}`;
     const cached = storedResponses.get(url);
-    const token = await getToken();
+    const token = await getToken(refreshedToken);
     const headers = new Headers(options.headers);
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (options.body !== undefined) headers.set('Content-Type', 'application/json');
@@ -20,7 +20,12 @@ export const createApiClient = (getToken) => {
     if (response.status === 304 && cached) return cached.data;
     if (response.status === 204) return null;
     const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.success) throw new ApiError(payload?.error?.message ?? 'Relay could not complete the request.', response.status, payload?.error?.code, payload?.requestId);
+    if (!response.ok || !payload?.success) {
+      // A just-refreshed identity token resolves normal expiry and claim-update
+      // races without ever retrying after an authenticated application request.
+      if (!refreshedToken && response.status === 401 && payload?.error?.code === 'INVALID_TOKEN' && token) return request(path, options, true);
+      throw new ApiError(payload?.error?.message ?? 'Relay could not complete the request.', response.status, payload?.error?.code, payload?.requestId, payload?.error?.details);
+    }
     if (method === 'GET') storedResponses.set(url, { etag: response.headers.get('ETag'), data: payload });
     return payload;
   };

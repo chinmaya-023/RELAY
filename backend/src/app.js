@@ -1,7 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { env, hasFirebaseConfiguration } from './config/env.js';
+import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { createRequireAuth } from './middleware/auth.js';
 import { requestId } from './lib/requestId.js';
@@ -21,6 +21,8 @@ import { ApiKeyService } from './services/apiKeyService.js';
 import { createApiKeyRouter } from './routes/apiKeys.js';
 import { AdminService } from './services/adminService.js';
 import { createAdminRouter } from './routes/admin.js';
+import { AccountDeletionService } from './services/accountDeletionService.js';
+import { createAccountRouter } from './routes/account.js';
 import { createGatewayHandler } from './gateway/gatewayHandler.js';
 import { createRateLimitMiddleware, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
 
@@ -35,6 +37,7 @@ export const createApp = (dependencies = {}) => {
   const authenticatedApiRateLimiter = dependencies.authenticatedApiRateLimiter ?? new MemoryRateLimiter();
   const apiKeyService = dependencies.apiKeyService ?? new ApiKeyService(repository);
   const adminService = dependencies.adminService ?? new AdminService(repository);
+  const accountDeletionService = dependencies.accountDeletionService ?? new AccountDeletionService(repository);
   const app = express();
 
   app.disable('x-powered-by');
@@ -56,8 +59,8 @@ export const createApp = (dependencies = {}) => {
     maxAge: 600
   }));
   app.get(['/', '/health'], (_request, response) => response.json({ status: 'ok', message: 'RELAY SERVER' }));
-  app.get('/healthz', (_request, response) => response.json({ success: true, data: { service: 'relay-api', firebaseConfigured: hasFirebaseConfiguration } }));
-  app.get('/api/status', (_request, response) => response.json({ success: true, data: { firebaseConfigured: hasFirebaseConfiguration, authentication: 'firebase' } }));
+  app.get('/healthz', (_request, response) => response.json({ status: 'ok', message: 'RELAY SERVER' }));
+  app.get('/api/status', (_request, response) => response.json({ success: true, data: { service: 'relay-api', authentication: 'configured' } }));
 
   app.use('/api', express.json({ limit: '1mb' }));
   app.use('/api', (_request, response, next) => { response.set('Cache-Control', 'no-store'); next(); });
@@ -73,12 +76,13 @@ export const createApp = (dependencies = {}) => {
   app.use('/api', createConfigurationRouter({ repository, resources, failoverService }));
   app.use('/api', createEventRouter({ repository, resources }));
   app.use('/api/api-keys', createApiKeyRouter({ repository, apiKeyService }));
+  app.use('/api/account', createAccountRouter({ accountDeletionService }));
   app.use('/api/admin', createAdminRouter({ adminService }));
   app.use('/p/:projectId', createGatewayHandler({ resources, failoverService, rateLimiter }));
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService } };
+  return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService, accountDeletionService } };
 };
 
 export default createApp().app;

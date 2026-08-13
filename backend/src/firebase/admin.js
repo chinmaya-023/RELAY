@@ -7,7 +7,7 @@ let database;
 
 export const initializeFirebase = () => {
   if (database) return database;
-  if (!hasFirebaseConfiguration) throw new AppError(503, 'FIREBASE_NOT_CONFIGURED', 'Firebase Admin credentials and database URL are required.');
+  if (!hasFirebaseConfiguration) throw new AppError(503, 'SERVICE_NOT_CONFIGURED', 'The account service is not configured.');
   const credential = env.firebase.clientEmail && env.firebase.privateKey
     ? cert({ projectId: env.firebase.projectId, clientEmail: env.firebase.clientEmail, privateKey: env.firebase.privateKey })
     : undefined;

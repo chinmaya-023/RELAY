@@ -4,3 +4,9 @@ dist/
 .env.*
 !.env.example
 *.log
+
+temp-cred.txt
+*.pem
+*.key
+*.p8
+service-account*.json

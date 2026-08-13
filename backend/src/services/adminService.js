@@ -1,5 +1,6 @@
 import { getAuth } from 'firebase-admin/auth';
 import { AppError } from '../lib/errors.js';
+import { initializeFirebase } from '../firebase/admin.js';
 
 const publicUser = (user) => ({
   uid: user.uid,
@@ -14,7 +15,10 @@ const publicUser = (user) => ({
 export class AdminService {
   constructor(repository, options = {}) {
     this.repository = repository;
-    this.auth = options.auth ?? (() => getAuth());
+    this.auth = options.auth ?? (() => {
+      initializeFirebase();
+      return getAuth();
+    });
   }
 
   async overview() {

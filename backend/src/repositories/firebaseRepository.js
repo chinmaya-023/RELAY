@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { db } from '../firebase/admin.js';
 import { AppError, notFound } from '../lib/errors.js';
 
@@ -228,5 +228,82 @@ export class FirebaseRepository {
       [`indexes/users/${uid}/apiKeys/${id}/revokedAt`]: timestamp
     });
     return { ...key, revokedAt: timestamp };
+  }
+
+  async getAccountDeletionRequest(uid) { return this.get(`accountDeletionRequests/${uid}`); }
+
+  async saveAccountDeletionRequest(uid, request) {
+    await this.update({ [`accountDeletionRequests/${uid}`]: request });
+    return request;
+  }
+
+  async createAccountDeletionRequest(uid, request) {
+    const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((existing) => (
+      existing?.processing || existing?.cooldownUntil > request.createdAt ? undefined : request
+    ));
+    return { created: result.committed, request: result.snapshot.val() };
+  }
+
+  async clearAccountDeletionRequest(uid) { await this.update({ [`accountDeletionRequests/${uid}`]: null }); }
+
+  async claimAccountDeletionRequest(uid, timestamp) {
+    const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => {
+      if (!request || request.processing || request.expiresAt <= timestamp) return undefined;
+      return { ...request, processing: true, processingAt: timestamp };
+    });
+    return { claimed: result.committed, request: result.snapshot.val() };
+  }
+
+  async verifyAndClaimAccountDeletionRequest(uid, candidateHash, timestamp, maxAttempts) {
+    let status = 'INVALID';
+    const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => {
+      if (!request) return undefined;
+      if (request.processing) {
+        status = 'IN_PROGRESS';
+        return undefined;
+      }
+      if (request.expiresAt <= timestamp) {
+        status = 'EXPIRED';
+        return undefined;
+      }
+      if (request.attempts >= maxAttempts) return null;
+
+      const expected = Buffer.from(request.codeHash, 'hex');
+      const actual = Buffer.from(candidateHash, 'hex');
+      const valid = expected.length === actual.length && timingSafeEqual(expected, actual);
+      if (!valid) {
+        status = 'INVALID';
+        const attempts = request.attempts + 1;
+        return attempts >= maxAttempts ? null : { ...request, attempts };
+      }
+      status = 'VALID';
+      return { ...request, processing: true, processingAt: timestamp };
+    });
+    if (status === 'VALID' && result.committed && result.snapshot.val()?.processing) return { status: 'VALID', request: result.snapshot.val() };
+    return { status, request: result.snapshot.val() };
+  }
+
+  async releaseAccountDeletionRequest(uid) {
+    await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => (
+      request?.processing ? { ...request, processing: false, processingAt: null } : request
+    ));
+  }
+
+  async deleteAccountData(uid) {
+    const [projects, apiKeys] = await Promise.all([this.listProjects(uid), this.listApiKeys(uid)]);
+    await Promise.all(projects.map(async (project) => {
+      const membership = await this.get(`members/${project.id}/${uid}`);
+      if (membership?.role === 'OWNER') return this.deleteProject(project.id, uid);
+      return this.update({ [`members/${project.id}/${uid}`]: null, [projectIndexPath(uid, project.id)]: null });
+    }));
+
+    const updates = {
+      [`indexes/users/${uid}`]: null
+    };
+    for (const key of apiKeys) {
+      updates[`apiKeys/${key.id}`] = null;
+      updates[`apiKeyPrefixes/${key.prefix}`] = null;
+    }
+    await this.update(updates);
   }
 }

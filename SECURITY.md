@@ -11,7 +11,7 @@ Relay follows a defence-in-depth model. Firebase Authentication owns user creden
 - API keys are scoped, project-restricted, revocable, and SHA-256 hashed with a server-only pepper. Raw keys are displayed once.
 - Express disables `X-Powered-By`, applies Helmet headers, a restrictive API CSP, HSTS in production, `no-referrer`, MIME-sniffing protection, and anti-framing policy.
 - API mutations accept JSON only; request bodies are limited to 1 MB. Identifiers, URLs, and mutable fields are schema-validated before they reach business logic.
-- Firebase Realtime Database is not SQL-backed, so SQL injection is not an applicable database interface. The same validation blocks path manipulation and NoSQL-style malformed input.
+- Realtime Database and Firestore rules deny all browser reads and writes. Only the backend's Admin SDK may access Relay data or the trusted email-delivery queue.
 - Every protected resource is checked against authenticated project membership and API-key scope, preventing IDOR/BOLA access by guessed IDs.
 - The gateway routes only to registered origins, validates DNS/IP destinations before connection, blocks private and metadata networks, limits request and response size, constrains methods and redirects, and never accepts a destination URL from the client.
 - API and gateway requests are rate limited. In-memory limits are bounded to resist key-space memory exhaustion; use shared rate limiting before scaling beyond one process.
@@ -25,6 +25,7 @@ Relay follows a defence-in-depth model. Firebase Authentication owns user creden
 4. Keep `FIREBASE_PRIVATE_KEY`, `RELAY_API_KEY_PEPPER`, and `RELAY_GATEWAY_SIGNING_SECRET` only in `backend/.env` or an equivalent secret store.
 5. Set a platform-level CSP header for the frontend that matches the Firebase domains used by the deployment. The HTML fallback CSP is intentionally restrictive.
 6. Replace process-local cache and rate limiting with shared services before running multiple backend instances.
+7. Deploy the included `database.rules.json` and `firestore.rules` before production. They intentionally deny all direct browser database access; Relay uses trusted backend code for every data operation.
 
 ## Security references
 

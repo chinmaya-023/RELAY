@@ -1,6 +1,8 @@
 import { getAuth } from 'firebase-admin/auth';
 import { env } from '../config/env.js';
+import { initializeFirebase } from '../firebase/admin.js';
 import { AppError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 export const assertVerifiedEmail = (user) => {
   if (user.email_verified !== true) throw new AppError(403, 'EMAIL_VERIFICATION_REQUIRED', 'Please verify your email address before accessing Relay.');
@@ -15,14 +17,16 @@ export const createRequireAuth = (apiKeyService) => async (request, _response, n
       return next();
     }
     const token = request.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!token) throw new AppError(401, 'AUTH_REQUIRED', 'A Firebase ID token is required.');
+    if (!token) throw new AppError(401, 'AUTH_REQUIRED', 'A ID token is required.');
+    initializeFirebase();
     request.user = await getAuth().verifyIdToken(token);
     assertVerifiedEmail(request.user);
     request.authType = 'firebase';
     return next();
   } catch (error) {
     if (error instanceof AppError) return next(error);
-    return next(new AppError(401, 'INVALID_TOKEN', 'The Firebase ID token could not be verified.'));
+    logger.warn('identity_token_verification_failed', { requestId: request.id, code: error?.code ?? 'UNKNOWN' });
+    return next(new AppError(401, 'INVALID_TOKEN', 'Your sign-in session could not be verified. Please sign out and sign in again.'));
   }
 };
 
@@ -33,7 +37,7 @@ export const requireScope = (scope) => (request, _response, next) => {
 
 export const requireInteractiveAuth = (request, _response, next) => request.authType === 'firebase'
   ? next()
-  : next(new AppError(403, 'INTERACTIVE_AUTH_REQUIRED', 'API key management requires Firebase Authentication.'));
+  : next(new AppError(403, 'INTERACTIVE_AUTH_REQUIRED', 'This action requires an authenticated account session.'));
 
 export const requireRelayAdmin = (request, _response, next) => {
   if (request.authType !== 'firebase') return next(new AppError(403, 'RELAY_ADMIN_REQUIRED', 'A Relay owner account is required.'));

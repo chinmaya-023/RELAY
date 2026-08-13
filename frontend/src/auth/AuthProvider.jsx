@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     refreshUser,
     authIssue,
     clearAuthIssue: () => setAuthIssue(''),
-    api: createApiClient(() => user?.getIdToken())
+    api: createApiClient((forceRefresh = false) => user?.getIdToken(forceRefresh))
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

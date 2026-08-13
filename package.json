@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "description": "Relay developer infrastructure reliability platform",
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "frontend",
     "backend"

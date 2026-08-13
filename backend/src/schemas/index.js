@@ -8,6 +8,7 @@ const hasControlCharacters = (value) => [...value].some((character) => {
   return codePoint < 32 || codePoint === 127;
 });
 const safeText = (minimum, maximum) => z.string().trim().min(minimum).max(maximum).refine((value) => !hasControlCharacters(value), 'Text contains unsupported control characters.');
+const emailAddress = z.string().trim().email().max(254);
 
 export const projectIdSchema = z.object({ id });
 export const backendIdSchema = z.object({ id });
@@ -20,3 +21,5 @@ export const gatewaySchema = z.object({ enabled: z.boolean().optional(), rateLim
 export const failoverSchema = z.object({ enabled: z.boolean().optional(), primaryBackendId: id.nullable().optional(), secondaryBackendId: id.nullable().optional(), failureThreshold: z.number().int().min(1).max(20).optional(), recoveryThreshold: z.number().int().min(1).max(20).optional(), cooldownSeconds: z.number().int().min(0).max(86_400).optional(), recoveryMode: z.enum(['automatic', 'manual']).optional() }).refine((value) => Object.keys(value).length > 0);
 export const apiKeyIdSchema = z.object({ id });
 export const apiKeySchema = z.object({ name: safeText(2, 80), projectId: id.nullable().optional(), scopes: z.array(z.enum(['project:read', 'project:write', 'monitoring:read', 'monitoring:write', 'gateway:read', 'gateway:write'])).min(1).max(6), expiresAt: z.number().int().positive().nullable().optional() });
+export const accountDeletionRequestSchema = z.object({ email: emailAddress });
+export const accountDeletionConfirmSchema = z.object({ email: emailAddress, code: z.string().regex(/^\d{6}$/, 'Enter the six-digit verification code.') });

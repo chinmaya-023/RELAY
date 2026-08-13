@@ -5,16 +5,14 @@ This is the standalone React/Vite dashboard. It can be deployed independently fr
 ```powershell
 cd frontend
 npm install
-npm run dev       # local development at http://localhost:5173
-npm run build     # production files in dist/
+npm run dev
+npm run build
 ```
 
-Before building, copy `.env.example` to `.env` and configure Firebase plus the deployed backend URLs:
+Before building, copy `.env.example` to `.env` and configure the identity-client values and backend URL:
 
 ```env
 VITE_API_BASE_URL=https://api.example.com
 ```
 
-The host must serve `dist/` as a single-page application and rewrite unknown application paths to `index.html`, so direct links such as `/projects/:projectId/monitoring` continue to work.
-
-For Vercel, this is already configured in `vercel.json`. Set the Vercel project Root Directory to `frontend`.
+Publish `dist/` as a single-page application. The included redirect rule serves `index.html` for application routes such as `/login` and `/register`; if your host uses another syntax, configure the equivalent fallback there.

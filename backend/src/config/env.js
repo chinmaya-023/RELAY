@@ -35,5 +35,6 @@ export const env = Object.freeze({
 });
 
 export const hasFirebaseConfiguration = Boolean(env.firebase.projectId && env.firebase.databaseURL);
+export const hasFirebaseAdminCredentials = Boolean(env.firebase.clientEmail && env.firebase.privateKey);
 export const hasFirebaseTriggerEmailConfiguration = Boolean(hasFirebaseConfiguration && env.firebase.triggerEmailEnabled && env.firebase.triggerEmailCollection);
 
