@@ -1,4 +1,4 @@
-import { createApp } from './app.js';
+import { createApp } from './relayApp.js';
 import { env, hasFirebaseConfiguration } from './config/env.js';
 import { MonitoringScheduler } from './services/scheduler.js';
 import { logger } from './lib/logger.js';
