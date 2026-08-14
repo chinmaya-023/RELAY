@@ -1,8 +1,9 @@
-import { app, services } from './app.js';
+import { createApp } from './coreApp.js';
 import { env, hasFirebaseConfiguration } from './config/env.js';
 import { MonitoringScheduler } from './services/scheduler.js';
 import { logger } from './lib/logger.js';
 
+const { app, services } = createApp();
 const scheduler = hasFirebaseConfiguration ? new MonitoringScheduler(services.repository, services.monitoringService) : null;
 const server = app.listen(env.port, () => {
   logger.info('relay_api_started', { port: env.port, firebaseConfigured: hasFirebaseConfiguration });
