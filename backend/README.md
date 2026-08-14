@@ -13,7 +13,7 @@ npm run start
 
 Set the values from `.env.example` in `backend/.env`. In production, set `CLIENT_ORIGINS` to the exact frontend URL and deploy this service behind HTTPS. Both `/api/*` and public gateway routes at `/p/:projectId/*` are served by this backend.
 
-For a Vercel deployment, set the project Root Directory to `backend`. The included `api/index.js` adapter and `vercel.json` route every request to the Express application. Use Node.js 22 or later in the project settings.
+For a Vercel deployment, set the project Root Directory to `backend`. Vercel detects the default Express export in `src/app.js`; no adapter or routing file is required. Use Node.js 22 or later in the project settings.
 
 ## Control-plane API
 

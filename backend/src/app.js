@@ -84,3 +84,10 @@ export const createApp = (dependencies = {}) => {
 
   return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService, accountDeletionService } };
 };
+
+// One shared application assembly for the deployed function and local server.
+export const application = createApp();
+export const app = application.app;
+export const services = application.services;
+
+export default app;
