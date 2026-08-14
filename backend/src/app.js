@@ -84,3 +84,9 @@ export const createApp = (dependencies = {}) => {
 
   return { app, services: { repository, resources, failoverService, monitoringService, alertNotificationService, rateLimiter, apiRateLimiter, authenticatedApiRateLimiter, apiKeyService, adminService, accountDeletionService } };
 };
+
+// Vercel detects src/app.js as the Express function entry point. Keep this a
+// concrete exported handler rather than an inline factory expression.
+const vercelApp = createApp().app;
+
+export default vercelApp;
