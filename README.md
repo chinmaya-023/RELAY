@@ -2,7 +2,7 @@
 
 Relay is a developer reliability platform for monitoring registered backends, providing a controlled gateway, and applying conservative health-based failover. It never behaves as an open proxy.
 
-Relay requires Node.js 22 or later.
+Relay requires Node.js 22.
 
 ## Repository layout
 
