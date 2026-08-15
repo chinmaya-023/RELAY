@@ -25,11 +25,18 @@ const Protected = ({ children }) => {
   return user.emailVerified ? <AppLayout>{children}</AppLayout> : <EmailVerification />;
 };
 
+const PublicOnly = ({ children }) => {
+  const { user } = useAuth();
+  if (user === undefined) return <Loading label="Preparing your Relay session…" />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return children;
+};
+
 export default function App() {
   return <Suspense fallback={<Loading label="Loading Relay..." />}><Routes>
-    <Route path="/" element={<LandingPage />} />
-    <Route path="/login" element={<AuthPage />} />
-    <Route path="/register" element={<AuthPage register />} />
+    <Route path="/" element={<PublicOnly><LandingPage /></PublicOnly>} />
+    <Route path="/login" element={<PublicOnly><AuthPage /></PublicOnly>} />
+    <Route path="/register" element={<PublicOnly><AuthPage register /></PublicOnly>} />
     <Route path="/forgot-password" element={<ForgotPassword />} />
     <Route path="/auth/action" element={<AuthAction />} />
     <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
