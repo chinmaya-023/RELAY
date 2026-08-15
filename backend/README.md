@@ -28,6 +28,7 @@ Authenticated API routes live under `/api`. Interactive sessions use `Authorizat
 - `/api/api-keys` - create, list, and revoke scoped API keys
 - `/api/account/deletion/request` - owner-reviewed permanent account-deletion request
 - `/api/admin/account-deletion-requests/:uid` - Relay owner approval or rejection of a deletion request
+- `DELETE /api/admin/users/:uid` - Relay owner direct account deletion (requires the selected account email in the JSON body)
 
 Account deletion requires the signed-in account email and a recent sign-in to submit a request. Requests are visible only to Relay owners and are permanently executed only after an owner explicitly approves them. This workflow does not depend on transactional email delivery.
 

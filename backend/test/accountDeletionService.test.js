@@ -24,7 +24,7 @@ const createRepository = () => {
     },
     async releaseAccountDeletionRequest() { if (request?.status === 'PROCESSING') request = { ...request, status: 'PENDING', reviewedBy: null, reviewedAt: null }; },
     async clearAccountDeletionRequest() { request = null; },
-    async deleteAccountData() { cleaned = true; },
+    async deleteAccountData() { cleaned = true; return []; },
     get request() { return request; },
     get cleaned() { return cleaned; }
   };
@@ -85,4 +85,20 @@ test('a failed approval keeps the request pending so a Relay owner can retry saf
   await service.request(user(clock), { email: 'owner@example.com' });
   await assert.rejects(service.review('user_1', { uid: 'admin_1', email: 'admin@example.com' }, 'approve'), { code: 'ACCOUNT_DELETION_RETRY_REQUIRED' });
   assert.equal(repository.request.status, 'PENDING');
+});
+
+test('a direct owner deletion clears account data and invalidates former project caches', async () => {
+  const repository = createRepository();
+  repository.deleteAccountData = async () => [{ id: 'prj_one' }, { id: 'prj_two' }];
+  const invalidated = [];
+  let identityDeleted = false;
+  const service = new AccountDeletionService(repository, {
+    isRelayOwner: () => false,
+    deleteIdentity: async () => { identityDeleted = true; },
+    invalidateProject: (projectId) => invalidated.push(projectId)
+  });
+
+  assert.deepEqual(await service.deleteDirectly('user_1', { uid: 'admin_1', email: 'admin@example.com' }), { status: 'DELETED' });
+  assert.equal(identityDeleted, true);
+  assert.deepEqual(invalidated, ['prj_one', 'prj_two']);
 });

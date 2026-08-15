@@ -6,12 +6,13 @@ export class ApiError extends Error {
   constructor(message, status, code, requestId, details) { super(message); this.status = status; this.code = code; this.requestId = requestId; this.details = details; }
 }
 
-export const createApiClient = (getToken) => {
+export const createApiClient = (getToken, getCacheNamespace = () => 'anonymous') => {
   const request = async (path, options = {}, refreshedToken = false) => {
     const method = options.method ?? 'GET';
     const url = `${API_BASE_URL}${path}`;
-    const cached = storedResponses.get(url);
     const token = await getToken(refreshedToken);
+    const cacheKey = `${getCacheNamespace()}::${url}`;
+    const cached = storedResponses.get(cacheKey);
     const headers = new Headers(options.headers);
     if (token) headers.set('Authorization', `Bearer ${token}`);
     if (options.body !== undefined) headers.set('Content-Type', 'application/json');
@@ -26,13 +27,13 @@ export const createApiClient = (getToken) => {
       if (!refreshedToken && response.status === 401 && payload?.error?.code === 'INVALID_TOKEN' && token) return request(path, options, true);
       throw new ApiError(payload?.error?.message ?? 'Relay could not complete the request.', response.status, payload?.error?.code, payload?.requestId, payload?.error?.details);
     }
-    if (method === 'GET') storedResponses.set(url, { etag: response.headers.get('ETag'), data: payload });
+    if (method === 'GET') storedResponses.set(cacheKey, { etag: response.headers.get('ETag'), data: payload });
     return payload;
   };
   return {
     get: (path, options = {}) => request(path, options),
     post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body }),
     patch: (path, body, options = {}) => request(path, { ...options, method: 'PATCH', body }),
-    delete: (path, options = {}) => request(path, { ...options, method: 'DELETE' })
+    delete: (path, body, options = {}) => request(path, { ...options, method: 'DELETE', body })
   };
 };

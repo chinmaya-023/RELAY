@@ -37,7 +37,7 @@ export const createApp = (dependencies = {}) => {
   const apiRateLimiter = dependencies.apiRateLimiter ?? new MemoryRateLimiter();
   const authenticatedApiRateLimiter = dependencies.authenticatedApiRateLimiter ?? new MemoryRateLimiter();
   const apiKeyService = dependencies.apiKeyService ?? new ApiKeyService(repository);
-  const accountDeletionService = dependencies.accountDeletionService ?? new AccountDeletionService(repository);
+  const accountDeletionService = dependencies.accountDeletionService ?? new AccountDeletionService(repository, { invalidateProject: (projectId) => resources.invalidateProject(projectId) });
   const adminService = dependencies.adminService ?? new AdminService(repository, { accountDeletionService });
   const app = express();
 

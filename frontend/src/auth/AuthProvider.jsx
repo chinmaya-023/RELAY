@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { browserSessionPersistence, getRedirectResult, onAuthStateChanged, reload, setPersistence } from 'firebase/auth';
 import { firebaseAuth, firebaseConfigured } from '../firebase.js';
 import { createApiClient } from '../api/client.js';
@@ -10,6 +11,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(undefined);
   const [, setRevision] = useState(0);
   const [authIssue, setAuthIssue] = useState('');
+  const queryClient = useQueryClient();
+  const previousUserId = useRef(undefined);
   useEffect(() => {
     if (!firebaseAuth) { setUser(null); return undefined; }
     let unsubscribe;
@@ -21,6 +24,11 @@ export const AuthProvider = ({ children }) => {
     configureAuth().catch(() => setUser(null));
     return () => unsubscribe?.();
   }, []);
+  useEffect(() => {
+    const userId = user?.uid ?? null;
+    if (previousUserId.current !== undefined && previousUserId.current !== userId) queryClient.clear();
+    previousUserId.current = userId;
+  }, [queryClient, user?.uid]);
   const refreshUser = async () => {
     if (!firebaseAuth?.currentUser) return null;
     await reload(firebaseAuth.currentUser);
@@ -35,7 +43,7 @@ export const AuthProvider = ({ children }) => {
     refreshUser,
     authIssue,
     clearAuthIssue: () => setAuthIssue(''),
-    api: createApiClient((forceRefresh = false) => user?.getIdToken(forceRefresh))
+    api: createApiClient((forceRefresh = false) => user?.getIdToken(forceRefresh), () => user?.uid ?? 'anonymous')
   };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

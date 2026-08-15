@@ -1,15 +1,21 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider.jsx';
 import { AppLayout } from './components/Layout.jsx';
-import { AuthPage } from './pages/AuthPage.jsx';
-import { ForgotPassword } from './pages/ForgotPassword.jsx';
-import { EmailVerification } from './pages/EmailVerification.jsx';
-import { AuthAction } from './pages/AuthAction.jsx';
-import { Dashboard, Projects } from './pages/Dashboard.jsx';
-import { ProjectWorkspace } from './pages/ProjectWorkspace.jsx';
-import { ApiKeys, Settings } from './pages/GeneralPages.jsx';
-import { AdminWorkspace } from './pages/AdminWorkspace.jsx';
 import { Loading } from './components/ui.jsx';
+
+const page = (load, name) => lazy(async () => ({ default: (await load())[name] }));
+const LandingPage = page(() => import('./pages/LandingPage.jsx'), 'LandingPage');
+const AuthPage = page(() => import('./pages/AuthPage.jsx'), 'AuthPage');
+const ForgotPassword = page(() => import('./pages/ForgotPassword.jsx'), 'ForgotPassword');
+const EmailVerification = page(() => import('./pages/EmailVerification.jsx'), 'EmailVerification');
+const AuthAction = page(() => import('./pages/AuthAction.jsx'), 'AuthAction');
+const Dashboard = page(() => import('./pages/Dashboard.jsx'), 'Dashboard');
+const Projects = page(() => import('./pages/Dashboard.jsx'), 'Projects');
+const ProjectWorkspace = page(() => import('./pages/ProjectWorkspace.jsx'), 'ProjectWorkspace');
+const ApiKeys = page(() => import('./pages/GeneralPages.jsx'), 'ApiKeys');
+const Settings = page(() => import('./pages/GeneralPages.jsx'), 'Settings');
+const AdminWorkspace = page(() => import('./pages/AdminWorkspace.jsx'), 'AdminWorkspace');
 
 const Protected = ({ children }) => {
   const { user, firebaseConfigured } = useAuth();
@@ -20,5 +26,18 @@ const Protected = ({ children }) => {
 };
 
 export default function App() {
-  return <Routes><Route path="/login" element={<AuthPage />} /><Route path="/register" element={<AuthPage register />} /><Route path="/forgot-password" element={<ForgotPassword />} /><Route path="/auth/action" element={<AuthAction />} /><Route path="/dashboard" element={<Protected><Dashboard /></Protected>} /><Route path="/projects" element={<Protected><Projects /></Protected>} /><Route path="/projects/:projectId/*" element={<Protected><ProjectWorkspace /></Protected>} /><Route path="/api-keys" element={<Protected><ApiKeys /></Protected>} /><Route path="/settings" element={<Protected><Settings /></Protected>} /><Route path="/admin" element={<Protected><AdminWorkspace /></Protected>} /><Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes>;
+  return <Suspense fallback={<Loading label="Loading Relay..." />}><Routes>
+    <Route path="/" element={<LandingPage />} />
+    <Route path="/login" element={<AuthPage />} />
+    <Route path="/register" element={<AuthPage register />} />
+    <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Route path="/auth/action" element={<AuthAction />} />
+    <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+    <Route path="/projects" element={<Protected><Projects /></Protected>} />
+    <Route path="/projects/:projectId/*" element={<Protected><ProjectWorkspace /></Protected>} />
+    <Route path="/api-keys" element={<Protected><ApiKeys /></Protected>} />
+    <Route path="/settings" element={<Protected><Settings /></Protected>} />
+    <Route path="/admin" element={<Protected><AdminWorkspace /></Protected>} />
+    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+  </Routes></Suspense>;
 }

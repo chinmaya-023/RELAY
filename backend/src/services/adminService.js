@@ -2,6 +2,8 @@ import { getAuth } from 'firebase-admin/auth';
 import { AppError } from '../lib/errors.js';
 import { initializeFirebase } from '../firebase/admin.js';
 
+const normalizeEmail = (value) => String(value ?? '').trim().toLowerCase();
+
 const publicUser = (user) => ({
   uid: user.uid,
   email: user.email ?? null,
@@ -62,12 +64,28 @@ export class AdminService {
 
   async setUserDisabled(uid, disabled) {
     if (!uid) throw new AppError(400, 'INVALID_USER_ID', 'A user ID is required.');
-    const user = await this.auth().updateUser(uid, { disabled });
+    const auth = this.auth();
+    const user = await auth.updateUser(uid, { disabled });
+    if (disabled) await auth.revokeRefreshTokens(uid);
     return publicUser(user);
   }
 
   async reviewAccountDeletion(uid, reviewer, decision) {
     if (!this.accountDeletionService) throw new AppError(503, 'ACCOUNT_DELETION_UNAVAILABLE', 'Account deletion review is temporarily unavailable.');
     return this.accountDeletionService.review(uid, reviewer, decision);
+  }
+
+  async deleteUser(uid, reviewer, email) {
+    if (!this.accountDeletionService) throw new AppError(503, 'ACCOUNT_DELETION_UNAVAILABLE', 'Account deletion is temporarily unavailable.');
+    if (uid === reviewer.uid) throw new AppError(400, 'RELAY_ADMIN_SELF_DELETION_DENIED', 'Relay owners cannot delete their own account.');
+    let user;
+    try {
+      user = await this.auth().getUser(uid);
+    } catch (error) {
+      if (error?.code === 'auth/user-not-found') throw new AppError(404, 'ACCOUNT_NOT_FOUND', 'The selected account no longer exists.');
+      throw error;
+    }
+    if (!user.email || normalizeEmail(user.email) !== normalizeEmail(email)) throw new AppError(400, 'ACCOUNT_DELETION_EMAIL_MISMATCH', 'Enter the email address for the selected account to confirm deletion.');
+    return this.accountDeletionService.deleteDirectly(uid, reviewer);
   }
 }

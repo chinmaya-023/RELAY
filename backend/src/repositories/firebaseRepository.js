@@ -312,5 +312,6 @@ export class FirebaseRepository {
       updates[`apiKeyPrefixes/${key.prefix}`] = null;
     }
     await this.update(updates);
+    return projects;
   }
 }

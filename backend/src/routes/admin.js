@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors.js';
 const userIdSchema = z.object({ uid: z.string().min(1).max(128) });
 const accountStateSchema = z.object({ disabled: z.boolean() });
 const deletionDecisionSchema = z.object({ decision: z.enum(['approve', 'reject']) });
+const directDeletionSchema = z.object({ email: z.string().trim().email().max(254) });
 
 export const createAdminRouter = ({ adminService }) => {
   const router = Router();
@@ -22,6 +23,11 @@ export const createAdminRouter = ({ adminService }) => {
     const { uid } = userIdSchema.parse(request.params);
     const { decision } = deletionDecisionSchema.parse(request.body);
     return response.json({ success: true, data: await adminService.reviewAccountDeletion(uid, request.user, decision) });
+  });
+  router.delete('/users/:uid', async (request, response) => {
+    const { uid } = userIdSchema.parse(request.params);
+    const { email } = directDeletionSchema.parse(request.body);
+    return response.json({ success: true, data: await adminService.deleteUser(uid, request.user, email) });
   });
   return router;
 };

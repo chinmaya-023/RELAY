@@ -19,7 +19,8 @@ export const createRequireAuth = (apiKeyService) => async (request, _response, n
     const token = request.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token) throw new AppError(401, 'AUTH_REQUIRED', 'A ID token is required.');
     initializeFirebase();
-    request.user = await getAuth().verifyIdToken(token);
+    // Checking revocation also rejects disabled accounts on every protected request.
+    request.user = await getAuth().verifyIdToken(token, true);
     assertVerifiedEmail(request.user);
     request.authType = 'firebase';
     return next();

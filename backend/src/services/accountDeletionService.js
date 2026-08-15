@@ -19,6 +19,7 @@ export class AccountDeletionService {
     this.now = options.now ?? (() => Date.now());
     this.deleteIdentity = options.deleteIdentity ?? deleteIdentity;
     this.isRelayOwner = options.isRelayOwner ?? ((email) => env.adminEmails.includes(normalizeEmail(email)));
+    this.invalidateProject = options.invalidateProject ?? (() => undefined);
   }
 
   #assertRecentSignIn(user) {
@@ -65,9 +66,19 @@ export class AccountDeletionService {
     }
     const claim = await this.repository.claimAccountDeletionRequest(uid, reviewer.uid, timestamp);
     if (!claim.claimed) throw new AppError(409, 'ACCOUNT_DELETION_REQUEST_UNAVAILABLE', 'This account deletion request is no longer pending.');
+    return this.#deleteApprovedAccount(uid, true);
+  }
+
+  async deleteDirectly(uid, reviewer) {
+    if (uid === reviewer.uid) throw new AppError(400, 'RELAY_ADMIN_SELF_DELETION_DENIED', 'Relay owners cannot delete their own account.');
+    return this.#deleteApprovedAccount(uid, false);
+  }
+
+  async #deleteApprovedAccount(uid, hasPendingRequest) {
     try {
-      await this.repository.deleteAccountData(uid);
+      const projects = await this.repository.deleteAccountData(uid);
       await this.deleteIdentity(uid);
+      for (const project of projects ?? []) this.invalidateProject(project.id);
       await this.repository.clearAccountDeletionRequest(uid);
       return { status: 'DELETED' };
     } catch (error) {
@@ -75,9 +86,9 @@ export class AccountDeletionService {
         await this.repository.clearAccountDeletionRequest(uid);
         return { status: 'DELETED' };
       }
-      await this.repository.releaseAccountDeletionRequest(uid).catch((releaseError) => logger.error('account_deletion_release_failed', { uid, code: releaseError?.code ?? 'UNKNOWN' }));
+      if (hasPendingRequest) await this.repository.releaseAccountDeletionRequest(uid).catch((releaseError) => logger.error('account_deletion_release_failed', { uid, code: releaseError?.code ?? 'UNKNOWN' }));
       logger.error('account_deletion_failed', { uid, code: error?.code ?? 'UNKNOWN' });
-      throw new AppError(503, 'ACCOUNT_DELETION_RETRY_REQUIRED', 'Account deletion could not be completed. The request remains pending for review.');
+      throw new AppError(503, 'ACCOUNT_DELETION_RETRY_REQUIRED', hasPendingRequest ? 'Account deletion could not be completed. The request remains pending for review.' : 'Account deletion could not be completed. Please try again.');
     }
   }
 }
