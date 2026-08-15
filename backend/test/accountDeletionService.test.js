@@ -7,174 +7,82 @@ const createRepository = () => {
   let cleaned = false;
   return {
     async getAccountDeletionRequest() { return request; },
-    async saveAccountDeletionRequest(_uid, value) { request = value; },
-    async createAccountDeletionRequest(_uid, value) {
-      if (request?.cooldownUntil > value.createdAt) return { created: false, request };
-      request = value;
+    async createAccountDeletionRequest(_uid, next) {
+      if (['PENDING', 'PROCESSING'].includes(request?.status) || request?.cooldownUntil > next.requestedAt) return { created: false, request };
+      request = next;
       return { created: true, request };
     },
-    async clearAccountDeletionRequest() { request = null; },
-    async claimAccountDeletionRequest(_uid, timestamp) {
-      if (!request || request.processing || request.expiresAt <= timestamp) return { claimed: false, request };
-      request = { ...request, processing: true, processingAt: timestamp };
+    async claimAccountDeletionRequest(_uid, reviewerUid, timestamp) {
+      if (request?.status !== 'PENDING') return { claimed: false, request };
+      request = { ...request, status: 'PROCESSING', reviewedBy: reviewerUid, reviewedAt: timestamp };
       return { claimed: true, request };
     },
-    async verifyAndClaimAccountDeletionRequest(_uid, candidateHash, timestamp, maxAttempts) {
-      if (!request || request.expiresAt <= timestamp) return { status: 'EXPIRED', request };
-      if (request.processing) return { status: 'IN_PROGRESS', request };
-      if (request.attempts >= maxAttempts || request.codeHash !== candidateHash) {
-        const attempts = request.attempts + 1;
-        request = attempts >= maxAttempts ? null : { ...request, attempts };
-        return { status: 'INVALID', request };
-      }
-      request = { ...request, processing: true, processingAt: timestamp };
-      return { status: 'VALID', request };
+    async rejectAccountDeletionRequest(_uid, reviewerUid, timestamp) {
+      if (request?.status !== 'PENDING') return { reviewed: false, request };
+      request = { ...request, status: 'REJECTED', reviewedBy: reviewerUid, reviewedAt: timestamp };
+      return { reviewed: true, request };
     },
-    async releaseAccountDeletionRequest() { if (request) request = { ...request, processing: false, processingAt: null }; },
+    async releaseAccountDeletionRequest() { if (request?.status === 'PROCESSING') request = { ...request, status: 'PENDING', reviewedBy: null, reviewedAt: null }; },
+    async clearAccountDeletionRequest() { request = null; },
     async deleteAccountData() { cleaned = true; },
     get request() { return request; },
     get cleaned() { return cleaned; }
   };
 };
 
-test('account deletion requires the signed-in email, a recent sign-in, and a single-use verification code', async () => {
-  let clock = 1_800_000_000_000;
-  const repository = createRepository();
-  const deliveries = [];
-  let deletedIdentity = false;
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async (message) => deliveries.push(message),
-    deleteIdentity: async () => { deletedIdentity = true; }
-  });
-  const user = { uid: 'user_1', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
+const user = (clock, overrides = {}) => ({ uid: 'user_1', email: 'owner@example.com', auth_time: Math.floor(clock / 1000), ...overrides });
 
-  await assert.rejects(service.request(user, { email: 'other@example.com' }), { code: 'ACCOUNT_DELETION_EMAIL_MISMATCH' });
-  const sent = await service.request(user, { email: 'OWNER@example.com' });
-  assert.equal(sent.cooldownSeconds, 60);
-  assert.equal(deliveries.length, 1);
-  assert.match(deliveries[0].message.text, /483920/);
-  await assert.rejects(service.request(user, { email: 'owner@example.com' }), { code: 'ACCOUNT_DELETION_CODE_COOLDOWN' });
-
-  const result = await service.confirm(user, { email: 'owner@example.com', code: '483920' });
-  assert.deepEqual(result, { deleted: true });
-  assert.equal(repository.request, null);
-  assert.equal(deletedIdentity, true);
-  assert.equal(repository.cleaned, true);
-  await assert.rejects(service.confirm(user, { email: 'owner@example.com', code: '483920' }), { code: 'ACCOUNT_DELETION_CODE_INVALID' });
-});
-
-test('account deletion expires codes and clears them after five invalid attempts', async () => {
-  let clock = 1_800_000_000_000;
-  const repository = createRepository();
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async () => undefined,
-    deleteIdentity: async () => undefined
-  });
-  const user = { uid: 'user_2', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
-
-  await service.request(user, { email: 'owner@example.com' });
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await assert.rejects(service.confirm(user, { email: 'owner@example.com', code: '000000' }), { code: 'ACCOUNT_DELETION_CODE_INVALID' });
-  }
-  assert.equal(repository.request, null);
-
-  clock += 60_001;
-  await service.request(user, { email: 'owner@example.com' });
-  clock += 10 * 60 * 1000;
-  await assert.rejects(service.confirm(user, { email: 'owner@example.com', code: '483920' }), { code: 'ACCOUNT_DELETION_CODE_INVALID' });
-  assert.equal(repository.request.expiresAt, clock);
-});
-
-test('parallel invalid verification attempts are limited to five in total', async () => {
+test('a signed-in user creates one pending account-deletion request without email delivery', async () => {
   const clock = 1_800_000_000_000;
   const repository = createRepository();
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async () => undefined,
-    deleteIdentity: async () => undefined
-  });
-  const user = { uid: 'user_parallel', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
+  const service = new AccountDeletionService(repository, { now: () => clock, isRelayOwner: () => false });
 
-  await service.request(user, { email: 'owner@example.com' });
-  const results = await Promise.allSettled(Array.from({ length: 20 }, () => service.confirm(user, { email: 'owner@example.com', code: '000000' })));
-  assert.equal(results.filter((result) => result.status === 'rejected').length, 20);
+  await assert.rejects(service.request(user(clock), { email: 'other@example.com' }), { code: 'ACCOUNT_DELETION_EMAIL_MISMATCH' });
+  assert.deepEqual(await service.request(user(clock, { name: 'Owner' }), { email: 'OWNER@example.com' }), { status: 'PENDING', requestedAt: clock, reviewedAt: null });
+  assert.equal(repository.request.status, 'PENDING');
+  assert.equal(repository.request.email, 'owner@example.com');
+  assert.deepEqual(await service.request(user(clock), { email: 'owner@example.com' }), { status: 'PENDING', requestedAt: clock, reviewedAt: null, alreadyRequested: true });
+});
+
+test('account deletion requires a recent sign-in and protects Relay owner accounts', async () => {
+  const clock = 1_800_000_000_000;
+  const repository = createRepository();
+  const service = new AccountDeletionService(repository, { now: () => clock, isRelayOwner: (email) => email === 'owner@example.com' });
+
+  await assert.rejects(service.request(user(clock - 16 * 60 * 1000), { email: 'owner@example.com' }), { code: 'ACCOUNT_DELETION_REAUTH_REQUIRED' });
+  await assert.rejects(service.request(user(clock), { email: 'owner@example.com' }), { code: 'RELAY_OWNER_DELETION_DENIED' });
   assert.equal(repository.request, null);
 });
 
-test('account deletion does not report success when Relay data cleanup fails', async () => {
+test('a Relay owner can reject or approve a pending deletion, but never their own', async () => {
   let clock = 1_800_000_000_000;
+  const repository = createRepository();
+  let identityDeleted = false;
+  const service = new AccountDeletionService(repository, { now: () => clock, isRelayOwner: () => false, deleteIdentity: async () => { identityDeleted = true; } });
+  const requester = user(clock);
+  const reviewer = { uid: 'admin_1', email: 'admin@example.com' };
+
+  await service.request(requester, { email: requester.email });
+  assert.deepEqual(await service.review(requester.uid, reviewer, 'reject'), { status: 'REJECTED' });
+  assert.equal(repository.request.status, 'REJECTED');
+  assert.deepEqual(await service.status(requester), { status: 'REJECTED', requestedAt: clock, reviewedAt: clock });
+
+  clock += 60 * 60 * 1000;
+  await service.request(user(clock), { email: requester.email });
+  await assert.rejects(service.review(reviewer.uid, reviewer, 'approve'), { code: 'RELAY_ADMIN_SELF_DELETION_DENIED' });
+  assert.deepEqual(await service.review(requester.uid, reviewer, 'approve'), { status: 'DELETED' });
+  assert.equal(repository.cleaned, true);
+  assert.equal(identityDeleted, true);
+  assert.equal(repository.request, null);
+});
+
+test('a failed approval keeps the request pending so a Relay owner can retry safely', async () => {
+  const clock = 1_800_000_000_000;
   const repository = createRepository();
   repository.deleteAccountData = async () => { throw new Error('database unavailable'); };
-  let deletedIdentity = false;
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async () => undefined,
-    deleteIdentity: async () => { deletedIdentity = true; }
-  });
-  const user = { uid: 'user_3', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
+  const service = new AccountDeletionService(repository, { now: () => clock, isRelayOwner: () => false, deleteIdentity: async () => undefined });
 
-  await service.request(user, { email: 'owner@example.com' });
-  await assert.rejects(service.confirm(user, { email: 'owner@example.com', code: '483920' }), { code: 'ACCOUNT_DELETION_RETRY_REQUIRED' });
-  assert.equal(deletedIdentity, false);
-  assert.equal(repository.request.processing, false);
-});
-
-test('account deletion keeps the verified request so an identity-deletion failure can be retried safely', async () => {
-  let clock = 1_800_000_000_000;
-  const repository = createRepository();
-  let deletionAttempts = 0;
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async () => undefined,
-    deleteIdentity: async () => {
-      deletionAttempts += 1;
-      if (deletionAttempts === 1) throw new Error('identity service unavailable');
-    }
-  });
-  const user = { uid: 'user_4', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
-
-  await service.request(user, { email: 'owner@example.com' });
-  await assert.rejects(service.confirm(user, { email: 'owner@example.com', code: '483920' }), { code: 'ACCOUNT_DELETION_RETRY_REQUIRED' });
-  assert.equal(repository.request.processing, false);
-  assert.deepEqual(await service.confirm(user, { email: 'owner@example.com', code: '483920' }), { deleted: true });
-  assert.equal(repository.request, null);
-});
-
-test('account deletion clears the deletion record when the identity has already been removed', async () => {
-  const clock = 1_800_000_000_000;
-  const repository = createRepository();
-  const service = new AccountDeletionService(repository, {
-    now: () => clock,
-    pepper: 'test-pepper',
-    createCode: () => '483920',
-    isDeliveryConfigured: true,
-    queueEmail: async () => undefined,
-    deleteIdentity: async () => {
-      const error = new Error('already deleted');
-      error.code = 'auth/user-not-found';
-      throw error;
-    }
-  });
-  const user = { uid: 'user_5', email: 'owner@example.com', auth_time: Math.floor(clock / 1000) };
-
-  await service.request(user, { email: 'owner@example.com' });
-  assert.deepEqual(await service.confirm(user, { email: 'owner@example.com', code: '483920' }), { deleted: true });
-  assert.equal(repository.request, null);
+  await service.request(user(clock), { email: 'owner@example.com' });
+  await assert.rejects(service.review('user_1', { uid: 'admin_1', email: 'admin@example.com' }, 'approve'), { code: 'ACCOUNT_DELETION_RETRY_REQUIRED' });
+  assert.equal(repository.request.status, 'PENDING');
 });

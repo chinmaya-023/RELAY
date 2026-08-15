@@ -4,6 +4,7 @@ import { AppError } from '../lib/errors.js';
 import { parseOutboundUrl, resolvePublicDestination } from '../security/ssrf.js';
 
 const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const cancellationError = () => new AppError(499, 'REQUEST_CANCELLED', 'The request was cancelled.');
 
 const readResponse = (response, maxBytes) => new Promise((resolve, reject) => {
   const chunks = [];
@@ -21,10 +22,21 @@ const readResponse = (response, maxBytes) => new Promise((resolve, reject) => {
   response.on('error', reject);
 });
 
-const requestOnce = async ({ url, address, method, headers, body, timeoutMs, maxResponseBytes }) => new Promise((resolve, reject) => {
+const requestOnce = async ({ url, address, method, headers, body, timeoutMs, maxResponseBytes, signal }) => new Promise((resolve, reject) => {
   const client = url.protocol === 'https:' ? https : http;
   const defaultPort = url.protocol === 'https:' ? '443' : '80';
   const hostnameHeader = url.port && url.port !== defaultPort ? `${url.hostname}:${url.port}` : url.hostname;
+  let settled = false;
+  let abort = () => undefined;
+  const settle = (callback) => (value) => {
+    if (settled) return;
+    settled = true;
+    signal?.removeEventListener('abort', abort);
+    callback(value);
+  };
+  const fail = settle(reject);
+  const succeed = settle(resolve);
+  if (signal?.aborted) return fail(cancellationError());
   const request = client.request({
     protocol: url.protocol,
     hostname: address,
@@ -38,21 +50,24 @@ const requestOnce = async ({ url, address, method, headers, body, timeoutMs, max
   }, async (response) => {
     try {
       const responseBody = await readResponse(response, maxResponseBytes);
-      resolve({ status: response.statusCode ?? 502, headers: response.headers, body: responseBody });
-    } catch (error) { reject(error); }
+      succeed({ status: response.statusCode ?? 502, headers: response.headers, body: responseBody });
+    } catch (error) { fail(error); }
   });
+  abort = () => request.destroy(cancellationError());
+  signal?.addEventListener('abort', abort, { once: true });
   request.on('timeout', () => request.destroy(new AppError(504, 'ORIGIN_TIMEOUT', 'Origin request timed out.')));
-  request.on('error', (error) => reject(error instanceof AppError ? error : new AppError(502, 'ORIGIN_UNAVAILABLE', 'Origin request failed.')));
+  request.on('error', (error) => fail(error instanceof AppError ? error : new AppError(502, 'ORIGIN_UNAVAILABLE', 'Origin request failed.')));
   if (body?.length) request.write(body);
   request.end();
 });
 
-export const requestExternal = async ({ url: rawUrl, method = 'GET', headers = {}, body, timeoutMs = 10_000, redirects = 0, maxResponseBytes = MAX_RESPONSE_BYTES }) => {
+export const requestExternal = async ({ url: rawUrl, method = 'GET', headers = {}, body, timeoutMs = 10_000, redirects = 0, maxResponseBytes = MAX_RESPONSE_BYTES, signal }) => {
   let url = parseOutboundUrl(rawUrl);
   for (let attempt = 0; attempt <= redirects; attempt += 1) {
+    if (signal?.aborted) throw cancellationError();
     // Resolve immediately before every connection and connect to the validated IP to prevent DNS rebinding.
     const destination = await resolvePublicDestination(url);
-    const response = await requestOnce({ url, address: destination.addresses[0].address, method, headers, body, timeoutMs, maxResponseBytes });
+    const response = await requestOnce({ url, address: destination.addresses[0].address, method, headers, body, timeoutMs, maxResponseBytes, signal });
     const location = response.headers.location;
     if (response.status >= 300 && response.status < 400 && location && attempt < redirects) {
       if (!['GET', 'HEAD'].includes(method.toUpperCase())) return response;

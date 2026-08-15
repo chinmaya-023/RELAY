@@ -5,6 +5,7 @@ import { AppError } from '../lib/errors.js';
 
 const userIdSchema = z.object({ uid: z.string().min(1).max(128) });
 const accountStateSchema = z.object({ disabled: z.boolean() });
+const deletionDecisionSchema = z.object({ decision: z.enum(['approve', 'reject']) });
 
 export const createAdminRouter = ({ adminService }) => {
   const router = Router();
@@ -16,6 +17,11 @@ export const createAdminRouter = ({ adminService }) => {
     const { disabled } = accountStateSchema.parse(request.body);
     if (uid === request.user.uid && disabled) throw new AppError(400, 'RELAY_ADMIN_SELF_SUSPEND_DENIED', 'Relay owners cannot suspend their own account.');
     return response.json({ success: true, data: await adminService.setUserDisabled(uid, disabled) });
+  });
+  router.patch('/account-deletion-requests/:uid', async (request, response) => {
+    const { uid } = userIdSchema.parse(request.params);
+    const { decision } = deletionDecisionSchema.parse(request.body);
+    return response.json({ success: true, data: await adminService.reviewAccountDeletion(uid, request.user, decision) });
   });
   return router;
 };

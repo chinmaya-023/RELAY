@@ -25,6 +25,7 @@ import { AccountDeletionService } from './services/accountDeletionService.js';
 import { createAccountRouter } from './routes/account.js';
 import { createGatewayHandler } from './gateway/gatewayHandler.js';
 import { createRateLimitMiddleware, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
+import { AppError } from './lib/errors.js';
 
 export const createApp = (dependencies = {}) => {
   const repository = dependencies.repository ?? new FirebaseRepository();
@@ -36,8 +37,8 @@ export const createApp = (dependencies = {}) => {
   const apiRateLimiter = dependencies.apiRateLimiter ?? new MemoryRateLimiter();
   const authenticatedApiRateLimiter = dependencies.authenticatedApiRateLimiter ?? new MemoryRateLimiter();
   const apiKeyService = dependencies.apiKeyService ?? new ApiKeyService(repository);
-  const adminService = dependencies.adminService ?? new AdminService(repository);
   const accountDeletionService = dependencies.accountDeletionService ?? new AccountDeletionService(repository);
+  const adminService = dependencies.adminService ?? new AdminService(repository, { accountDeletionService });
   const app = express();
 
   app.disable('x-powered-by');
@@ -78,7 +79,15 @@ export const createApp = (dependencies = {}) => {
   app.use('/api/api-keys', createApiKeyRouter({ repository, apiKeyService }));
   app.use('/api/account', createAccountRouter({ accountDeletionService }));
   app.use('/api/admin', createAdminRouter({ adminService }));
-  app.use('/p/:projectId', createGatewayHandler({ resources, failoverService, rateLimiter }));
+  const gatewayHandler = createGatewayHandler({ resources, failoverService, rateLimiter });
+  app.use('/g/:gatewaySlug', async (request, response, next) => {
+    try {
+      const projectId = await repository.projectIdForGatewaySlug(String(request.params.gatewaySlug).toLowerCase());
+      if (!projectId) throw new AppError(404, 'GATEWAY_NOT_FOUND', 'Gateway was not found.');
+      request.relayProjectId = projectId;
+      return gatewayHandler(request, response, next);
+    } catch (error) { return next(error); }
+  });
   app.use(notFoundHandler);
   app.use(errorHandler);
 

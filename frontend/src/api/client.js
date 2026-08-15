@@ -29,5 +29,10 @@ export const createApiClient = (getToken) => {
     if (method === 'GET') storedResponses.set(url, { etag: response.headers.get('ETag'), data: payload });
     return payload;
   };
-  return { get: (path) => request(path), post: (path, body) => request(path, { method: 'POST', body }), patch: (path, body) => request(path, { method: 'PATCH', body }), delete: (path) => request(path, { method: 'DELETE' }) };
+  return {
+    get: (path, options = {}) => request(path, options),
+    post: (path, body, options = {}) => request(path, { ...options, method: 'POST', body }),
+    patch: (path, body, options = {}) => request(path, { ...options, method: 'PATCH', body }),
+    delete: (path, options = {}) => request(path, { ...options, method: 'DELETE' })
+  };
 };

@@ -63,8 +63,17 @@ export const createBackendRouter = ({ repository, resources, monitoringService }
   router.post('/backends/:id/test', requireScope('monitoring:write'), async (request, response) => {
     const { id } = backendIdSchema.parse(request.params);
     await verifyBackendAccess(repository, resources, id, request.user);
-    const result = await monitoringService.checkBackend(id);
-    return response.json({ success: true, data: result });
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.on('aborted', abort);
+    response.on('close', () => { if (!response.writableEnded) abort(); });
+    try {
+      const result = await monitoringService.checkBackend(id, { signal: controller.signal });
+      if (!controller.signal.aborted) return response.json({ success: true, data: result });
+      return undefined;
+    } finally {
+      request.off('aborted', abort);
+    }
   });
 
   return router;

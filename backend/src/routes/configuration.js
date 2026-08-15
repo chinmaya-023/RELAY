@@ -3,6 +3,9 @@ import { projectIdSchema, failoverSchema, gatewaySchema } from '../schemas/index
 import { sendVersioned } from '../lib/etag.js';
 import { ensureOwner } from './projects.js';
 import { requireScope } from '../middleware/auth.js';
+import { AppError } from '../lib/errors.js';
+
+const gatewayResponse = (config) => ({ ...config, url: config.enabled && config.slug ? `/g/${config.slug}` : null });
 
 export const createConfigurationRouter = ({ repository, resources, failoverService }) => {
   const router = Router();
@@ -15,15 +18,22 @@ export const createConfigurationRouter = ({ repository, resources, failoverServi
   router.get('/projects/:id/gateway', requireScope('gateway:read'), async (request, response) => {
     const { id } = await access(request);
     const config = await resources.gatewayConfig(id);
-    return sendVersioned(request, response, { type: 'gateway', id, version: config.version, data: { ...config, url: `/p/${id}` } });
+    return sendVersioned(request, response, { type: 'gateway', id, version: config.version, data: gatewayResponse(config) });
   });
 
   router.patch('/projects/:id/gateway', requireScope('gateway:write'), async (request, response) => {
     const { id, project } = await access(request);
     ensureOwner(project);
-    const config = await repository.updateGatewayConfig(id, gatewaySchema.parse(request.body));
+    const input = gatewaySchema.parse(request.body);
+    const existing = await repository.getGatewayConfig(id);
+    if (input.enabled ?? existing?.enabled) {
+      const backends = await repository.listBackends(id);
+      if (!backends.length) throw new AppError(400, 'GATEWAY_BACKEND_REQUIRED', 'Register at least one backend before enabling the gateway.');
+      if (!(input.slug ?? existing?.slug)) throw new AppError(400, 'GATEWAY_NAME_REQUIRED', 'Choose a gateway name before enabling the gateway.');
+    }
+    const config = await repository.updateGatewayConfig(id, input);
     resources.invalidateProject(id);
-    return response.json({ success: true, data: { ...config, url: `/p/${id}` }, meta: { version: config.version } });
+    return response.json({ success: true, data: gatewayResponse(config), meta: { version: config.version } });
   });
 
   router.get('/projects/:id/failover', requireScope('monitoring:read'), async (request, response) => {

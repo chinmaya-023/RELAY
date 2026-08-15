@@ -57,3 +57,21 @@ test('an outage alert is created only after every configured retry is exhausted 
   assert.equal(alertCalls.length, 1);
   assert.equal(alertCalls[0].result.attempts, 3);
 });
+
+test('a cancelled manual health test does not record a failed health result', async () => {
+  const repository = createRepository();
+  const controller = new AbortController();
+  const service = new MonitoringService(repository, { reconcile: async () => {} }, {
+    request: async ({ signal }) => {
+      controller.abort();
+      const error = new Error('cancelled');
+      error.code = signal.aborted ? 'REQUEST_CANCELLED' : 'UNEXPECTED';
+      throw error;
+    },
+    wait: async () => {}
+  });
+
+  await assert.rejects(service.checkBackend(backend.id, { signal: controller.signal }), { code: 'REQUEST_CANCELLED' });
+  assert.equal(repository.state.saved.length, 0);
+  assert.equal(repository.state.events.length, 0);
+});

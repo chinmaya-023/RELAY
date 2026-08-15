@@ -51,13 +51,17 @@ From the repository root, `npm install` followed by `npm run dev` starts both wo
 
 Relay uses managed email/password and Google sign-in. Email/password accounts must verify their email address before the frontend or backend grants access. Password recovery uses the identity service's secure, time-limited recovery-email flow; Relay does not create or store its own password-reset codes.
 
-Configure Email/Password and Google in the identity service, set a password policy, enable email-enumeration protection, and authorize every frontend origin that can use sign-in or verification links.
+Configure Email/Password and Google in the identity service, set a password policy, enable email-enumeration protection, and authorize every frontend origin that can use sign-in or verification links. For a branded verification experience, set the verification-email template's custom action URL to your frontend's `/auth/action` route. The included page validates the one-time link and then sends the user back to sign in.
 
 ## Monitoring alerts
 
 New monitors check every 10 minutes by default, make up to five probe attempts, and wait two minutes between retries. Relay applies the configured failure threshold only after a full probe cycle fails, records the incident in the dashboard, and sends one notification when the backend transitions to `UNHEALTHY`.
 
 Configure the trusted email-delivery integration described in `backend/.env.example` before enabling email alerts. Relay obtains the destination from the verified project owner and writes delivery requests only from trusted backend code; until delivery is configured, Relay keeps the dashboard alert and records email delivery as unavailable.
+
+## Account deletion review
+
+Relay requires the signed-in email address and a recent sign-in before a user can submit a deletion request. The request is then visible only to Relay owners, who must explicitly approve or reject it. Approval permanently removes the account and its Relay data; no email delivery extension is required for this workflow.
 
 ## Relay owner console
 

@@ -15,6 +15,7 @@ const publicUser = (user) => ({
 export class AdminService {
   constructor(repository, options = {}) {
     this.repository = repository;
+    this.accountDeletionService = options.accountDeletionService;
     this.auth = options.auth ?? (() => {
       initializeFirebase();
       return getAuth();
@@ -33,14 +34,19 @@ export class AdminService {
       const statuses = health.reduce((total, item) => ({ ...total, [item?.status ?? 'UNKNOWN']: (total[item?.status ?? 'UNKNOWN'] ?? 0) + 1 }), {});
       return { id: project.id, name: project.name, description: project.description, ownerId: project.ownerId, updatedAt: project.updatedAt, backends: backends.length, statuses, failoverMode: failoverState?.mode ?? 'PRIMARY', recentEvents: events };
     }));
-    const users = await this.listUsers();
+    const [users, deletionRequests] = await Promise.all([this.listUsers(), this.repository.listAccountDeletionRequests()]);
     const metrics = summaries.reduce((total, project) => ({
       projects: total.projects + 1,
       backends: total.backends + project.backends,
       unhealthy: total.unhealthy + (project.statuses.UNHEALTHY ?? 0),
       activeFailovers: total.activeFailovers + (project.failoverMode === 'FAILOVER' ? 1 : 0)
     }), { projects: 0, backends: 0, unhealthy: 0, activeFailovers: 0 });
-    return { metrics: { ...metrics, users: users.length, disabledUsers: users.filter((user) => user.disabled).length }, projects: summaries, users };
+    return {
+      metrics: { ...metrics, users: users.length, disabledUsers: users.filter((user) => user.disabled).length, pendingDeletionRequests: deletionRequests.filter((request) => request.status === 'PENDING').length },
+      projects: summaries,
+      users,
+      deletionRequests
+    };
   }
 
   async listUsers() {
@@ -58,5 +64,10 @@ export class AdminService {
     if (!uid) throw new AppError(400, 'INVALID_USER_ID', 'A user ID is required.');
     const user = await this.auth().updateUser(uid, { disabled });
     return publicUser(user);
+  }
+
+  async reviewAccountDeletion(uid, reviewer, decision) {
+    if (!this.accountDeletionService) throw new AppError(503, 'ACCOUNT_DELETION_UNAVAILABLE', 'Account deletion review is temporarily unavailable.');
+    return this.accountDeletionService.review(uid, reviewer, decision);
   }
 }

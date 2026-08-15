@@ -11,9 +11,9 @@ npm run dev
 npm run start
 ```
 
-Set the values from `.env.example` in `backend/.env`. In production, set `CLIENT_ORIGINS` to the exact frontend URL and deploy this service behind HTTPS. Both `/api/*` and public gateway routes at `/p/:projectId/*` are served by this backend.
+Set the values from `.env.example` in `backend/.env`. In production, set `CLIENT_ORIGINS` to the exact frontend URL and deploy this service behind HTTPS. Both `/api/*` and public gateway routes at `/g/{gateway-name}/*` are served by this backend.
 
-For a Vercel deployment, set the project Root Directory to `backend`. Vercel detects the default Express export in `src/app.js`; no adapter or routing file is required. Use Node.js 22 or later in the project settings.
+For serverless deployment, set the project Root Directory to `backend`. The default Express export is in `src/app.js`; no adapter or routing file is required. Use Node.js 22 or later in the deployment settings.
 
 ## Control-plane API
 
@@ -26,13 +26,16 @@ Authenticated API routes live under `/api`. Interactive sessions use `Authorizat
 - `/api/projects/:id/failover` - conservative health-driven routing policy
 - `/api/projects/:id/{alerts,logs,events}` - operational data
 - `/api/api-keys` - create, list, and revoke scoped API keys
-- `/api/account/deletion/request`, `/api/account/deletion/confirm` - verified permanent account deletion
+- `/api/account/deletion/request` - owner-reviewed permanent account-deletion request
+- `/api/admin/account-deletion-requests/:uid` - Relay owner approval or rejection of a deletion request
+
+Account deletion requires the signed-in account email and a recent sign-in to submit a request. Requests are visible only to Relay owners and are permanently executed only after an owner explicitly approves them. This workflow does not depend on transactional email delivery.
 
 All versioned resources return deterministic ETags and honor `If-None-Match` with `304 Not Modified`.
 
 ## Gateway
 
-Public data-plane traffic uses `/p/{projectId}/*` (for example, `/p/prj_123/v1/status`). The destination always comes from the project's registered backend, never from a request URL.
+Public data-plane traffic uses `/g/{gateway-name}/*` (for example, `/g/payments-api/v1/status`). The destination always comes from the project's registered backend, never from a request URL. A gateway cannot be enabled until the project has a registered backend and a unique gateway name.
 
 Before registration and immediately before every outbound connection, Relay validates the origin's scheme, resolves DNS, denies private/loopback/link-local/metadata addresses, and connects to the validated IP. GET and HEAD health checks may follow a small, revalidated redirect chain; writes are not automatically retried.
 

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { signOut, updateProfile } from 'firebase/auth';
+import { useState } from 'react';
+import { updateProfile } from 'firebase/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { EmptyState, ErrorState, Loading } from '../components/ui.jsx';
 import { firebaseAuth } from '../firebase.js';
@@ -10,140 +9,32 @@ const scopes = ['project:read', 'project:write', 'monitoring:read', 'monitoring:
 const normalizedEmail = (value) => String(value ?? '').trim().toLowerCase();
 
 export const ApiKeys = () => {
-  const { api } = useAuth();
-  const client = useQueryClient();
-  const [name, setName] = useState('');
-  const [selectedScopes, setSelectedScopes] = useState(['project:read']);
-  const [secret, setSecret] = useState('');
+  const { api } = useAuth(); const client = useQueryClient();
+  const [name, setName] = useState(''); const [selectedScopes, setSelectedScopes] = useState(['project:read']); const [secret, setSecret] = useState('');
   const keys = useQuery({ queryKey: ['api-keys'], queryFn: () => api.get('/api/api-keys') });
-  const create = useMutation({
-    mutationFn: () => api.post('/api/api-keys', { name, scopes: selectedScopes }),
-    onSuccess: (result) => {
-      setSecret(result.data.key);
-      setName('');
-      client.invalidateQueries({ queryKey: ['api-keys'] });
-    }
-  });
+  const create = useMutation({ mutationFn: () => api.post('/api/api-keys', { name, scopes: selectedScopes }), onSuccess: (result) => { setSecret(result.data.key); setName(''); client.invalidateQueries({ queryKey: ['api-keys'] }); } });
   const revoke = useMutation({ mutationFn: (id) => api.delete(`/api/api-keys/${id}`), onSuccess: () => client.invalidateQueries({ queryKey: ['api-keys'] }) });
   const toggleScope = (scope) => setSelectedScopes((current) => current.includes(scope) ? current.filter((item) => item !== scope) : [...current, scope]);
-
   if (keys.isLoading) return <Loading />;
   if (keys.error) return <ErrorState error={keys.error} />;
-
-  return <section className="space-y-6">
-    <div><p className="label text-relay-400">Developer access</p><h1 className="mt-2 text-3xl font-semibold">API keys</h1><p className="mt-2 text-sm text-slate-400">Keys are scoped, hashed at rest, and shown only once. Store a new key in your secret manager immediately.</p></div>
-    {secret && <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-5"><p className="font-semibold text-amber-100">Copy this API key now</p><code className="mt-3 block overflow-auto rounded-lg bg-black/25 p-3 text-sm text-amber-100">{secret}</code><p className="mt-2 text-sm text-amber-100/80">It will not be shown again.</p><button className="btn-secondary mt-4" onClick={() => setSecret('')}>I stored it safely</button></div>}
-    <form className="panel space-y-4 p-5" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
-      <h2 className="font-semibold">Create API key</h2>
-      <label className="block"><span className="label">Key name</span><input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="CI deployment reader" minLength="2" maxLength="80" required /></label>
-      <fieldset><legend className="label">Scopes</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{scopes.map((scope) => <label className="flex items-center gap-2 rounded-lg border border-white/10 p-2 text-sm" key={scope}><input type="checkbox" checked={selectedScopes.includes(scope)} onChange={() => toggleScope(scope)} />{scope}</label>)}</div></fieldset>
-      {create.error && <p className="text-sm text-rose-200">{create.error.message}</p>}
-      <button className="btn-primary" disabled={create.isPending || !selectedScopes.length}>{create.isPending ? 'Creating…' : 'Create key'}</button>
-    </form>
-    {keys.data.data.length ? <div className="panel divide-y divide-white/10">{keys.data.data.map((key) => <article className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between" key={key.id}><div><p className="font-medium">{key.name}</p><p className="mt-1 font-mono text-xs text-slate-400">{key.prefix}…</p><p className="mt-2 text-xs text-slate-500">{key.scopes.join(', ')} · {key.revokedAt ? 'Revoked' : 'Active'}</p></div>{!key.revokedAt && <button className="btn-secondary" onClick={() => revoke.mutate(key.id)} disabled={revoke.isPending}>Revoke</button>}</article>)}</div> : <EmptyState title="No API keys yet">Use your dashboard account for interactive access, or create a scoped key for machine-to-machine calls.</EmptyState>}
-  </section>;
+  return <section className="space-y-6"><div><p className="label text-relay-400">Developer access</p><h1 className="mt-2 text-3xl font-semibold">API keys</h1><p className="mt-2 text-sm text-slate-400">Keys are scoped, hashed at rest, and shown only once. Store a new key in your secret manager immediately.</p></div>{secret && <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-5"><p className="font-semibold text-amber-100">Copy this API key now</p><code className="mt-3 block overflow-auto rounded-lg bg-black/25 p-3 text-sm text-amber-100">{secret}</code><p className="mt-2 text-sm text-amber-100/80">It will not be shown again.</p><button className="btn-secondary mt-4" onClick={() => setSecret('')}>I stored it safely</button></div>}<form className="panel space-y-4 p-5" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}><h2 className="font-semibold">Create API key</h2><label className="block"><span className="label">Key name</span><input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="CI deployment reader" minLength="2" maxLength="80" required /></label><fieldset><legend className="label">Scopes</legend><div className="mt-2 grid gap-2 sm:grid-cols-2">{scopes.map((scope) => <label className="flex items-center gap-2 rounded-lg border border-white/10 p-2 text-sm" key={scope}><input type="checkbox" checked={selectedScopes.includes(scope)} onChange={() => toggleScope(scope)} />{scope}</label>)}</div></fieldset>{create.error && <p className="text-sm text-rose-200">{create.error.message}</p>}<button className="btn-primary" disabled={create.isPending || !selectedScopes.length}>{create.isPending ? 'Creating…' : 'Create key'}</button></form>{keys.data.data.length ? <div className="panel divide-y divide-white/10">{keys.data.data.map((key) => <article className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between" key={key.id}><div><p className="font-medium">{key.name}</p><p className="mt-1 font-mono text-xs text-slate-400">{key.prefix}…</p><p className="mt-2 text-xs text-slate-500">{key.scopes.join(', ')} · {key.revokedAt ? 'Revoked' : 'Active'}</p></div>{!key.revokedAt && <button className="btn-secondary" onClick={() => revoke.mutate(key.id)} disabled={revoke.isPending}>Revoke</button>}</article>)}</div> : <EmptyState title="No API keys yet">Use your dashboard account for interactive access, or create a scoped key for machine-to-machine calls.</EmptyState>}</section>;
 };
 
 const AccountDeletion = () => {
-  const { api, user } = useAuth();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState('confirm');
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [cooldownUntil, setCooldownUntil] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-
-  useEffect(() => {
-    const update = () => setSecondsLeft(Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)));
-    update();
-    if (!cooldownUntil) return undefined;
-    const interval = window.setInterval(update, 1000);
-    return () => window.clearInterval(interval);
-  }, [cooldownUntil]);
-
-  const requestCode = useMutation({
-    mutationFn: () => api.post('/api/account/deletion/request', { email }),
-    onSuccess: (result) => {
-      setStep('verify');
-      setCode('');
-      setCooldownUntil(Date.now() + result.data.cooldownSeconds * 1000);
-    },
-    onError: (error) => {
-      const retryAfter = Number(error.details?.retryAfter ?? 0);
-      if (retryAfter > 0) setCooldownUntil(Date.now() + retryAfter * 1000);
-    }
-  });
-  const confirmDeletion = useMutation({
-    mutationFn: () => api.post('/api/account/deletion/confirm', { email, code }),
-    onSuccess: async () => {
-      await signOut(firebaseAuth).catch(() => undefined);
-      navigate('/login', { replace: true });
-    }
-  });
+  const { api, user } = useAuth(); const client = useQueryClient();
+  const [open, setOpen] = useState(false); const [email, setEmail] = useState('');
+  const status = useQuery({ queryKey: ['account-deletion-request'], queryFn: () => api.get('/api/account/deletion/request'), enabled: open, retry: false, refetchInterval: open ? 20_000 : false });
+  const requestDeletion = useMutation({ mutationFn: () => api.post('/api/account/deletion/request', { email }), onSuccess: () => client.invalidateQueries({ queryKey: ['account-deletion-request'] }) });
+  const request = status.data?.data;
+  const isPending = ['PENDING', 'PROCESSING'].includes(request?.status);
   const matchingEmail = normalizedEmail(email) === normalizedEmail(user?.email);
-  const error = requestCode.error ?? confirmDeletion.error;
-  const close = () => {
-    if (requestCode.isPending || confirmDeletion.isPending) return;
-    setOpen(false);
-    setStep('confirm');
-    setEmail('');
-    setCode('');
-    setCooldownUntil(0);
-    requestCode.reset();
-    confirmDeletion.reset();
-  };
+  const close = () => { if (!requestDeletion.isPending) { setOpen(false); setEmail(''); requestDeletion.reset(); } };
 
-  return <article className="max-w-xl rounded-xl border border-rose-400/30 bg-rose-500/5 p-5">
-    <h2 className="font-semibold text-rose-100">Delete account</h2>
-    <p className="mt-2 text-sm leading-6 text-slate-300">Permanently delete your Relay account and its projects, backends, gateway configuration, monitoring data, and API keys. This cannot be undone.</p>
-    {!open ? <button className="mt-5 rounded-lg border border-rose-300/40 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10" onClick={() => setOpen(true)}>Delete account</button> : <div className="mt-5 border-t border-rose-300/20 pt-5">
-      {step === 'confirm' ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); requestCode.mutate(); }}>
-        <p className="text-sm leading-6 text-slate-300">To continue, type the email address for this signed-in account. We will send a short-lived verification code before deleting anything.</p>
-        <label className="block"><span className="label">Confirm your email address</span><input className="field" type="email" autoComplete="email" maxLength="254" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
-        {error && <p className="text-sm text-rose-200" role="alert">{error.message}</p>}
-        <div className="flex flex-wrap gap-3"><button className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60" disabled={!matchingEmail || requestCode.isPending}>{requestCode.isPending ? 'Sending…' : 'Send verification code'}</button><button className="btn-secondary" type="button" onClick={close}>Cancel</button></div>
-      </form> : <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); confirmDeletion.mutate(); }}>
-        <p className="text-sm leading-6 text-slate-300">Enter the six-digit verification code sent to your email. It expires after 10 minutes and can be used once.</p>
-        <label className="block"><span className="label">Verification code</span><input className="field max-w-xs tracking-[0.35em]" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength="6" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} required /></label>
-        {error && <p className="text-sm text-rose-200" role="alert">{error.message}</p>}
-        <div className="flex flex-wrap gap-3"><button className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60" disabled={code.length !== 6 || confirmDeletion.isPending}>{confirmDeletion.isPending ? 'Deleting…' : 'Permanently delete account'}</button><button className="btn-secondary" type="button" onClick={() => requestCode.mutate()} disabled={secondsLeft > 0 || requestCode.isPending || confirmDeletion.isPending}>{secondsLeft > 0 ? `Resend available in ${secondsLeft}s` : requestCode.isPending ? 'Sending…' : 'Resend code'}</button><button className="btn-secondary" type="button" onClick={close}>Cancel</button></div>
-      </form>}
-    </div>}
-  </article>;
+  return <article className="max-w-xl rounded-xl border border-rose-400/30 bg-rose-500/5 p-5"><h2 className="font-semibold text-rose-100">Delete account</h2><p className="mt-2 text-sm leading-6 text-slate-300">Permanently delete your Relay account and its projects, backends, gateway configuration, monitoring data, and API keys. This cannot be undone.</p><p className="mt-2 text-xs leading-5 text-slate-400">For security, you must confirm your signed-in email address and a Relay owner must approve the request before anything is deleted.</p>{!open ? <button className="mt-5 rounded-lg border border-rose-300/40 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/10" onClick={() => setOpen(true)}>Delete account</button> : <div className="mt-5 border-t border-rose-300/20 pt-5">{status.isLoading ? <p className="text-sm text-slate-400">Checking request status…</p> : isPending ? <div className="space-y-3"><p className="text-sm leading-6 text-amber-100">Your deletion request is awaiting Relay owner approval. Your account stays active until an owner approves it.</p><p className="text-xs text-slate-500">This status refreshes automatically while this panel is open.</p><button className="btn-secondary" type="button" onClick={close}>Close</button></div> : <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); requestDeletion.mutate(); }}><p className="text-sm leading-6 text-slate-300">Type the email address for this signed-in account. A Relay owner will review the request before anything is deleted.</p><label className="block"><span className="label">Confirm your email address</span><input className="field" type="email" autoComplete="email" maxLength="254" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>{request?.status === 'REJECTED' && <p className="text-sm text-amber-100">A Relay owner declined your previous request. You may submit a new request after the cooldown period.</p>}{(requestDeletion.error || status.error) && <p className="text-sm text-rose-200" role="alert">{(requestDeletion.error ?? status.error).message}</p>}<div className="flex flex-wrap gap-3"><button className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60" disabled={!matchingEmail || requestDeletion.isPending}>{requestDeletion.isPending ? 'Submitting…' : 'Request account deletion'}</button><button className="btn-secondary" type="button" onClick={close}>Cancel</button></div></form>}</div>}</article>;
 };
 
 export const Settings = () => {
-  const { user, refreshUser } = useAuth();
-  const [name, setName] = useState(user?.displayName ?? '');
-  const [notice, setNotice] = useState('');
-  const [working, setWorking] = useState(false);
-  const saveProfile = async (event) => {
-    event.preventDefault();
-    setWorking(true);
-    setNotice('');
-    try {
-      await updateProfile(firebaseAuth.currentUser, { displayName: name.trim() });
-      await refreshUser();
-      setNotice('Your profile was updated.');
-    } catch {
-      setNotice('Relay could not update your profile. Please try again.');
-    } finally {
-      setWorking(false);
-    }
-  };
-
-  return <section className="space-y-6">
-    <div><p className="label text-relay-400">Workspace</p><h1 className="mt-2 text-3xl font-semibold">Settings</h1><p className="mt-2 text-sm text-slate-400">Manage your Relay identity and account security.</p></div>
-    <form className="panel max-w-xl space-y-4 p-5" onSubmit={saveProfile}>
-      <h2 className="font-semibold">Profile</h2>
-      <label className="block"><span className="label">Full name</span><input className="field" value={name} maxLength="80" onChange={(event) => setName(event.target.value)} required /></label>
-      <label className="block"><span className="label">Email address</span><input className="field opacity-70" value={user?.email ?? ''} disabled /></label>
-      <p className="text-xs leading-5 text-slate-500">Your name is visible only inside your Relay account. Email changes and password recovery are handled through the secure account service.</p>
-      {notice && <p className="text-sm text-relay-200">{notice}</p>}
-      <button className="btn-primary" disabled={working}>{working ? 'Saving…' : 'Save profile'}</button>
-    </form>
-    <article className="panel max-w-xl p-5"><h2 className="font-semibold">Account security</h2><p className="mt-2 text-sm leading-6 text-slate-400">Email verification is required for Relay access. Use the password-recovery flow from the sign-in page to securely reset your password.</p></article>
-    <AccountDeletion />
-  </section>;
+  const { user, refreshUser } = useAuth(); const [name, setName] = useState(user?.displayName ?? ''); const [notice, setNotice] = useState(''); const [working, setWorking] = useState(false);
+  const saveProfile = async (event) => { event.preventDefault(); setWorking(true); setNotice(''); try { await updateProfile(firebaseAuth.currentUser, { displayName: name.trim() }); await refreshUser(); setNotice('Your profile was updated.'); } catch { setNotice('Relay could not update your profile. Please try again.'); } finally { setWorking(false); } };
+  return <section className="space-y-6"><div><p className="label text-relay-400">Workspace</p><h1 className="mt-2 text-3xl font-semibold">Settings</h1><p className="mt-2 text-sm text-slate-400">Manage your Relay identity and account security.</p></div><form className="panel max-w-xl space-y-4 p-5" onSubmit={saveProfile}><h2 className="font-semibold">Profile</h2><label className="block"><span className="label">Full name</span><input className="field" value={name} maxLength="80" onChange={(event) => setName(event.target.value)} required /></label><label className="block"><span className="label">Email address</span><input className="field opacity-70" value={user?.email ?? ''} disabled /></label><p className="text-xs leading-5 text-slate-500">Your name is visible only inside your Relay account. Email changes and password recovery are handled through the secure account service.</p>{notice && <p className="text-sm text-relay-200">{notice}</p>}<button className="btn-primary" disabled={working}>{working ? 'Saving…' : 'Save profile'}</button></form><article className="panel max-w-xl p-5"><h2 className="font-semibold">Account security</h2><p className="mt-2 text-sm leading-6 text-slate-400">Email verification is required for Relay access. Use the password-recovery flow from the sign-in page to securely reset your password.</p></article><AccountDeletion /></section>;
 };

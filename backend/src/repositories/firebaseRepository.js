@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { db } from '../firebase/admin.js';
 import { AppError, notFound } from '../lib/errors.js';
 
@@ -36,7 +36,7 @@ export class FirebaseRepository {
       [`projects/${id}`]: project,
       [`members/${id}/${uid}`]: { role: 'OWNER', createdAt: timestamp },
       [projectIndexPath(uid, id)]: { name: project.name, description: project.description, version: 1, updatedAt: timestamp },
-      [`gatewayConfigs/${id}`]: { projectId: id, enabled: false, rateLimit: { windowSeconds: 60, maxRequests: 120 }, version: 1, updatedAt: timestamp },
+      [`gatewayConfigs/${id}`]: { projectId: id, enabled: false, slug: null, rateLimit: { windowSeconds: 60, maxRequests: 120 }, version: 1, updatedAt: timestamp },
       [`failoverConfigs/${id}`]: { projectId: id, enabled: false, primaryBackendId: null, secondaryBackendId: null, failureThreshold: 3, recoveryThreshold: 2, cooldownSeconds: 60, recoveryMode: 'automatic', version: 1, updatedAt: timestamp },
       [`failoverState/${id}`]: { projectId: id, activeBackendId: null, mode: 'PRIMARY', changedAt: timestamp, version: 1 }
     });
@@ -58,7 +58,10 @@ export class FirebaseRepository {
   async deleteProject(projectId, uid) {
     const project = await this.projectForUser(projectId, uid);
     if (project.role !== 'OWNER') throw new AppError(403, 'PROJECT_OWNER_REQUIRED', 'Only the project owner may delete a project.');
-    const backendIndex = (await this.get(`indexes/projects/${projectId}/backends`)) ?? {};
+    const [backendIndex, gatewayConfig] = await Promise.all([
+      this.get(`indexes/projects/${projectId}/backends`),
+      this.getGatewayConfig(projectId)
+    ]);
     const updates = {
       [`projects/${projectId}`]: null,
       [`members/${projectId}`]: null,
@@ -70,12 +73,13 @@ export class FirebaseRepository {
       [`indexes/projects/${projectId}`]: null,
       [projectIndexPath(project.ownerId, projectId)]: null
     };
-    for (const backendId of Object.keys(backendIndex)) {
+    for (const backendId of Object.keys(backendIndex ?? {})) {
       updates[`backends/${backendId}`] = null;
       updates[`monitors/${backendId}`] = null;
       updates[`health/${backendId}`] = null;
       updates[`healthHistory/${backendId}`] = null;
     }
+    if (gatewayConfig?.slug) updates[`gatewaySlugs/${gatewayConfig.slug}`] = null;
     await this.update(updates);
   }
 
@@ -148,11 +152,30 @@ export class FirebaseRepository {
 
   async getGatewayConfig(projectId) { return this.get(`gatewayConfigs/${projectId}`); }
 
+  async projectIdForGatewaySlug(slug) { return this.get(`gatewaySlugs/${slug}`); }
+
   async updateGatewayConfig(projectId, input) {
     const existing = await this.getGatewayConfig(projectId);
     if (!existing) throw notFound('Gateway configuration not found.');
+    const changingSlug = input.slug && input.slug !== existing.slug;
+    if (changingSlug) {
+      const claim = await db().ref(`gatewaySlugs/${input.slug}`).transaction((current) => {
+        if (!current || current === projectId) return projectId;
+        return undefined;
+      });
+      if (!claim.committed || claim.snapshot.val() !== projectId) {
+        throw new AppError(409, 'GATEWAY_NAME_TAKEN', 'This gateway name is already in use. Choose another name.');
+      }
+    }
     const next = { ...existing, ...input, version: existing.version + 1, updatedAt: now() };
-    await this.update({ [`gatewayConfigs/${projectId}`]: next });
+    const updates = { [`gatewayConfigs/${projectId}`]: next };
+    if (changingSlug && existing.slug) updates[`gatewaySlugs/${existing.slug}`] = null;
+    try {
+      await this.update(updates);
+    } catch (error) {
+      if (changingSlug) await db().ref(`gatewaySlugs/${input.slug}`).transaction((current) => (current === projectId ? null : current)).catch(() => undefined);
+      throw error;
+    }
     return next;
   }
 
@@ -239,53 +262,37 @@ export class FirebaseRepository {
 
   async createAccountDeletionRequest(uid, request) {
     const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((existing) => (
-      existing?.processing || existing?.cooldownUntil > request.createdAt ? undefined : request
+      ['PENDING', 'PROCESSING'].includes(existing?.status) || existing?.cooldownUntil > request.requestedAt ? undefined : request
     ));
     return { created: result.committed, request: result.snapshot.val() };
   }
 
+  async listAccountDeletionRequests() {
+    const requests = (await this.get('accountDeletionRequests')) ?? {};
+    return Object.entries(requests).map(([uid, request]) => ({ uid, ...request })).sort((a, b) => b.requestedAt - a.requestedAt);
+  }
+
   async clearAccountDeletionRequest(uid) { await this.update({ [`accountDeletionRequests/${uid}`]: null }); }
 
-  async claimAccountDeletionRequest(uid, timestamp) {
+  async claimAccountDeletionRequest(uid, reviewerUid, timestamp) {
     const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => {
-      if (!request || request.processing || request.expiresAt <= timestamp) return undefined;
-      return { ...request, processing: true, processingAt: timestamp };
+      if (request?.status !== 'PENDING') return undefined;
+      return { ...request, status: 'PROCESSING', reviewedBy: reviewerUid, reviewedAt: timestamp };
     });
     return { claimed: result.committed, request: result.snapshot.val() };
   }
 
-  async verifyAndClaimAccountDeletionRequest(uid, candidateHash, timestamp, maxAttempts) {
-    let status = 'INVALID';
+  async rejectAccountDeletionRequest(uid, reviewerUid, timestamp) {
     const result = await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => {
-      if (!request) return undefined;
-      if (request.processing) {
-        status = 'IN_PROGRESS';
-        return undefined;
-      }
-      if (request.expiresAt <= timestamp) {
-        status = 'EXPIRED';
-        return undefined;
-      }
-      if (request.attempts >= maxAttempts) return null;
-
-      const expected = Buffer.from(request.codeHash, 'hex');
-      const actual = Buffer.from(candidateHash, 'hex');
-      const valid = expected.length === actual.length && timingSafeEqual(expected, actual);
-      if (!valid) {
-        status = 'INVALID';
-        const attempts = request.attempts + 1;
-        return attempts >= maxAttempts ? null : { ...request, attempts };
-      }
-      status = 'VALID';
-      return { ...request, processing: true, processingAt: timestamp };
+      if (request?.status !== 'PENDING') return undefined;
+      return { ...request, status: 'REJECTED', reviewedBy: reviewerUid, reviewedAt: timestamp };
     });
-    if (status === 'VALID' && result.committed && result.snapshot.val()?.processing) return { status: 'VALID', request: result.snapshot.val() };
-    return { status, request: result.snapshot.val() };
+    return { reviewed: result.committed, request: result.snapshot.val() };
   }
 
   async releaseAccountDeletionRequest(uid) {
     await db().ref(`accountDeletionRequests/${uid}`).transaction((request) => (
-      request?.processing ? { ...request, processing: false, processingAt: null } : request
+      request?.status === 'PROCESSING' ? { ...request, status: 'PENDING', reviewedBy: null, reviewedAt: null, lastFailureAt: now() } : request
     ));
   }
 

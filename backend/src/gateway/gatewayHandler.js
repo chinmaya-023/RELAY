@@ -28,7 +28,7 @@ const signedOriginHeaders = ({ requestId, projectId, method, target }) => {
 export const createGatewayHandler = ({ resources, failoverService, rateLimiter }) => async (request, response, next) => {
   try {
     if (!GATEWAY_METHODS.has(request.method)) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'This HTTP method is not supported by the gateway.');
-    const projectId = request.params.projectId;
+    const projectId = request.relayProjectId ?? request.params.projectId;
     if (!projectId) throw new AppError(404, 'GATEWAY_PROJECT_NOT_FOUND', 'Gateway project was not found.');
     const config = await resources.gatewayConfig(projectId);
     if (!config?.enabled) throw new AppError(404, 'GATEWAY_DISABLED', 'Gateway is not enabled for this project.');
