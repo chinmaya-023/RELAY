@@ -1,6 +1,7 @@
 import express from 'express';
+import { requestId } from './lib/requestId.js';
 
-const serviceUnavailable = (response) => response
+const serviceUnavailable = (response, requestId) => response
   .set('Cache-Control', 'no-store')
   .status(503)
   .json({
@@ -8,12 +9,14 @@ const serviceUnavailable = (response) => response
     error: {
       code: 'SERVICE_TEMPORARILY_UNAVAILABLE',
       message: 'This service is temporarily unavailable. Please try again shortly.'
-    }
+    },
+    requestId
   });
 
 export const createRuntimeApp = ({ loadCoreApp = () => import('./coreApp.js').then(({ createApp }) => createApp().app) } = {}) => {
   const app = express();
   let coreAppPromise;
+  app.use(requestId);
 
   const coreApp = () => {
     if (!coreAppPromise) {
@@ -38,7 +41,7 @@ export const createRuntimeApp = ({ loadCoreApp = () => import('./coreApp.js').th
         timestamp: new Date().toISOString(),
         code: error?.code ?? 'MODULE_LOAD_FAILED'
       }));
-      return serviceUnavailable(response);
+      return serviceUnavailable(response, request.id);
     }
   });
 

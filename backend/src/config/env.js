@@ -12,9 +12,10 @@ const asInteger = (value, fallback) => {
 
 const asOrigins = (value) => value.split(',').map((origin) => origin.trim().replace(/\/$/, '')).filter(Boolean);
 const asEmails = (value) => value.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
+const nodeEnv = process.env.NODE_ENV ?? 'development';
 
 export const env = Object.freeze({
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+  nodeEnv,
   port: asInteger(process.env.PORT, 4000),
   clientOrigins: asOrigins(process.env.CLIENT_ORIGINS ?? process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'),
   adminEmails: asEmails(process.env.RELAY_ADMIN_EMAILS ?? ''),
@@ -24,6 +25,15 @@ export const env = Object.freeze({
     windowSeconds: asInteger(process.env.API_RATE_LIMIT_WINDOW_SECONDS, 60),
     maxRequests: asInteger(process.env.API_RATE_LIMIT_MAX_REQUESTS, 300)
   },
+  gatewayGlobalRateLimit: {
+    windowSeconds: asInteger(process.env.GATEWAY_GLOBAL_RATE_LIMIT_WINDOW_SECONDS, 60),
+    maxRequests: asInteger(process.env.GATEWAY_GLOBAL_RATE_LIMIT_MAX_REQUESTS, 10_000)
+  },
+  gatewayProjectRateLimit: {
+    windowSeconds: asInteger(process.env.GATEWAY_PROJECT_RATE_LIMIT_WINDOW_SECONDS, 60),
+    maxRequests: asInteger(process.env.GATEWAY_PROJECT_RATE_LIMIT_MAX_REQUESTS, 2_000)
+  },
+  allowHttpBackends: process.env.RELAY_ALLOW_HTTP_BACKENDS === 'true' || (process.env.RELAY_ALLOW_HTTP_BACKENDS !== 'false' && nodeEnv !== 'production'),
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID ?? '',
     databaseURL: process.env.FIREBASE_DATABASE_URL ?? '',

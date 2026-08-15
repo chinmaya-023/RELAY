@@ -1,5 +1,6 @@
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { env } from '../config/env.js';
 import { AppError } from '../lib/errors.js';
 
 const isPrivateIpv4 = (address) => {
@@ -21,6 +22,7 @@ export const parseOutboundUrl = (value) => {
   let url;
   try { url = new URL(value); } catch { throw new AppError(400, 'INVALID_ORIGIN_URL', 'Origin URL must be a valid absolute URL.'); }
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new AppError(400, 'INVALID_ORIGIN_URL', 'Origin URL must use HTTP(S) and must not include credentials.');
+  if (url.protocol === 'http:' && !env.allowHttpBackends) throw new AppError(400, 'INSECURE_ORIGIN_URL', 'Backend origins must use HTTPS in this environment.');
   if (url.port && !/^\d{1,5}$/.test(url.port)) throw new AppError(400, 'INVALID_ORIGIN_URL', 'Origin URL has an invalid port.');
   return url;
 };

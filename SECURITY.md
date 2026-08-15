@@ -10,11 +10,13 @@ Relay follows a defence-in-depth model. Firebase Authentication owns user creden
 - Browser authentication uses Firebase ID tokens in the `Authorization` header, not ambient cookies. State-changing API requests also validate allowed browser origins as CSRF defence in depth.
 - API keys are scoped, project-restricted, revocable, and SHA-256 hashed with a server-only pepper. Raw keys are displayed once.
 - Express disables `X-Powered-By`, applies Helmet headers, a restrictive API CSP, HSTS in production, `no-referrer`, MIME-sniffing protection, and anti-framing policy.
-- API mutations accept JSON only; request bodies are limited to 1 MB. Identifiers, URLs, and mutable fields are schema-validated before they reach business logic.
+- API mutations accept JSON only; request bodies are limited to 1 MB. Request URLs and headers have explicit limits, and identifiers, URLs, and mutable fields are schema-validated before they reach business logic.
 - Realtime Database and Firestore rules deny all browser reads and writes. Only the backend's Admin SDK may access Relay data or the trusted email-delivery queue.
 - Every protected resource is checked against authenticated project membership and API-key scope, preventing IDOR/BOLA access by guessed IDs.
-- The gateway routes only to registered origins, validates DNS/IP destinations before connection, blocks private and metadata networks, limits request and response size, constrains methods and redirects, and never accepts a destination URL from the client.
-- API and gateway requests are rate limited. In-memory limits are bounded to resist key-space memory exhaustion; use shared rate limiting before scaling beyond one process.
+- The gateway routes only to registered origins, validates DNS/IP destinations before connection, blocks private and metadata networks, limits request and response size, constrains methods and redirects, and never accepts a destination URL from the client. Production requires HTTPS origin URLs by default.
+- Gateway forwarding strips caller-supplied proxy and Relay-control headers. Relay does not disclose selected backend IDs, routing state, upstream redirect locations, or upstream authentication challenges.
+- API and gateway requests are rate limited. Gateway limits are layered per client/path, per project, and globally; in-memory limits are bounded to resist key-space memory exhaustion. Use shared rate limiting before scaling beyond one process.
+- Relay creates a server-generated request ID for every request. It is returned in `X-Request-ID` and used in structured logs without allowing callers to forge the ID.
 - React’s normal escaped rendering is used throughout; the codebase does not use `dangerouslySetInnerHTML`.
 
 ## Required configuration

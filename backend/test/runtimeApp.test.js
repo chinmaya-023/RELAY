@@ -41,7 +41,9 @@ test('requests needing the optional application stack receive a safe 503 respons
       error: {
         code: 'SERVICE_TEMPORARILY_UNAVAILABLE',
         message: 'This service is temporarily unavailable. Please try again shortly.'
-      }
+      },
+      requestId: response.headers.get('x-request-id')
     });
+    assert.match(response.headers.get('x-request-id'), /^relay_[0-9a-f-]{36}$/);
   });
 });

@@ -42,4 +42,8 @@ Before registration and immediately before every outbound connection, Relay vali
 
 When `RELAY_GATEWAY_SIGNING_SECRET` is set, outbound gateway calls include `X-Relay-Timestamp` and an HMAC-SHA256 `X-Relay-Signature`. Configure the origin to verify those values; the secret is never sent to the browser.
 
+Gateway calls have per-client/path, per-project, and global emergency rate limits. Requests with oversized URLs or headers are rejected before routing. Relay strips client-supplied forwarding and Relay-control headers, never returns the selected backend ID, and does not forward upstream redirect locations or authentication challenges.
+
+Production requires HTTPS backend origins by default. `RELAY_ALLOW_HTTP_BACKENDS=true` is available only for explicitly approved development use.
+
 The current rate limiter is process-local. Deploy Redis-backed rate limiting before operating multiple gateway instances.

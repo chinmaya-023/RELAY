@@ -88,12 +88,20 @@ export class FirebaseRepository {
     return Object.entries(index).map(([id, item]) => ({ id, ...item })).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  async getBackend(backendId) { return this.get(`backends/${backendId}`); }
+  async getBackend(backendId) {
+    const backend = await this.get(`backends/${backendId}`);
+    if (!backend) return null;
+    // Legacy records may contain an abandoned originAuthHeader field. Relay does
+    // not store or return backend credentials until a dedicated secret store is used.
+    const safeBackend = { ...backend };
+    delete safeBackend.originAuthHeader;
+    return safeBackend;
+  }
 
   async addBackend(projectId, input) {
     const id = identifier('bkd');
     const timestamp = now();
-    const backend = { id, projectId, name: input.name, originUrl: input.originUrl, healthPath: input.healthPath ?? '/health', role: input.role ?? 'PRIMARY', originAuthHeader: input.originAuthHeader ?? null, createdAt: timestamp, updatedAt: timestamp, version: 1 };
+    const backend = { id, projectId, name: input.name, originUrl: input.originUrl, healthPath: input.healthPath ?? '/health', role: input.role ?? 'PRIMARY', createdAt: timestamp, updatedAt: timestamp, version: 1 };
     const monitor = { backendId: id, enabled: false, intervalSeconds: 600, timeoutSeconds: 10, maxAttempts: 5, retryDelaySeconds: 120, failureThreshold: 1, recoveryThreshold: 2, keepAliveEnabled: false, version: 1, updatedAt: timestamp };
     await this.update({
       [`backends/${id}`]: backend,

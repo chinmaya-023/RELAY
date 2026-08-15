@@ -4,11 +4,12 @@ import { env } from '../config/env.js';
 import { readIncomingBody, requestExternal } from '../services/outboundRequest.js';
 
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length']);
-const FORWARDED_RESPONSE_HEADERS = new Set(['content-type', 'cache-control', 'etag', 'last-modified', 'location', 'www-authenticate', 'retry-after']);
+const PROXY_CONTROL_HEADERS = new Set(['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port', 'x-forwarded-proto', 'x-real-ip', 'x-request-id', 'x-relay-request-id', 'x-relay-project-id', 'x-relay-signature', 'x-relay-timestamp']);
+const FORWARDED_RESPONSE_HEADERS = new Set(['content-type', 'content-encoding', 'cache-control', 'etag', 'last-modified', 'retry-after']);
 const GATEWAY_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
 
-const forwardedRequestHeaders = (headers) => Object.fromEntries(Object.entries(headers)
-  .filter(([key, value]) => !HOP_BY_HOP.has(key.toLowerCase()) && value !== undefined)
+export const forwardedRequestHeaders = (headers) => Object.fromEntries(Object.entries(headers)
+  .filter(([key, value]) => !HOP_BY_HOP.has(key.toLowerCase()) && !PROXY_CONTROL_HEADERS.has(key.toLowerCase()) && value !== undefined)
   .map(([key, value]) => [key, Array.isArray(value) ? value.join(', ') : value]));
 
 const resolveTarget = (backend, request) => {
@@ -33,6 +34,10 @@ export const createGatewayHandler = ({ resources, failoverService, rateLimiter }
     const config = await resources.gatewayConfig(projectId);
     if (!config?.enabled) throw new AppError(404, 'GATEWAY_DISABLED', 'Gateway is not enabled for this project.');
     const clientIp = request.ip || request.socket.remoteAddress || 'unknown';
+    // Layer the data-plane budget so distributed clients cannot bypass protection
+    // by rotating IP addresses or paths.
+    rateLimiter.take('gateway:global', env.gatewayGlobalRateLimit);
+    rateLimiter.take(`gateway:project:${projectId}`, env.gatewayProjectRateLimit);
     const limit = rateLimiter.take(`${projectId}:${clientIp}:${request.path}`, config.rateLimit);
     response.set({ 'X-RateLimit-Remaining': String(limit.remaining), 'X-RateLimit-Reset': String(Math.floor(limit.resetAt / 1000)) });
     const backend = await failoverService.selectedBackend(projectId);
@@ -47,7 +52,6 @@ export const createGatewayHandler = ({ resources, failoverService, rateLimiter }
       redirects: ['GET', 'HEAD'].includes(request.method) ? 2 : 0
     });
     for (const [key, value] of Object.entries(upstream.headers)) if (FORWARDED_RESPONSE_HEADERS.has(key.toLowerCase()) && value) response.set(key, value);
-    response.set({ 'X-Relay-Backend-ID': backend.id, 'X-Relay-Routing-Mode': (await resources.routingConfig(projectId)).state?.mode ?? 'PRIMARY' });
     return response.status(upstream.status).send(upstream.body);
   } catch (error) { return next(error); }
 };

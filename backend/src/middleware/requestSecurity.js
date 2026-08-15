@@ -1,6 +1,16 @@
 import { AppError } from '../lib/errors.js';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const MAX_REQUEST_URL_BYTES = 8 * 1024;
+const MAX_REQUEST_HEADER_BYTES = 16 * 1024;
+
+export const rejectOversizedRequestMetadata = (request, _response, next) => {
+  const urlBytes = Buffer.byteLength(request.originalUrl ?? request.url ?? '', 'utf8');
+  if (urlBytes > MAX_REQUEST_URL_BYTES) return next(new AppError(414, 'REQUEST_URL_TOO_LARGE', 'Request URL exceeds the supported limit.'));
+  const headerBytes = Object.entries(request.headers).reduce((total, [name, value]) => total + Buffer.byteLength(name, 'utf8') + Buffer.byteLength(Array.isArray(value) ? value.join(',') : String(value ?? ''), 'utf8') + 4, 0);
+  if (headerBytes > MAX_REQUEST_HEADER_BYTES) return next(new AppError(431, 'REQUEST_HEADERS_TOO_LARGE', 'Request headers exceed the supported limit.'));
+  return next();
+};
 
 export const requireJsonBody = (request, _response, next) => {
   if (!mutationMethods.has(request.method)) return next();

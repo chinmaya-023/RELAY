@@ -24,7 +24,7 @@ import { createAdminRouter } from './routes/admin.js';
 import { AccountDeletionService } from './services/accountDeletionService.js';
 import { createAccountRouter } from './routes/account.js';
 import { createGatewayHandler } from './gateway/gatewayHandler.js';
-import { createRateLimitMiddleware, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
+import { createRateLimitMiddleware, rejectOversizedRequestMetadata, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
 import { AppError } from './lib/errors.js';
 
 export const createApp = (dependencies = {}) => {
@@ -42,7 +42,10 @@ export const createApp = (dependencies = {}) => {
   const app = express();
 
   app.disable('x-powered-by');
+  // Trusting forwarded headers must be configured only for a known proxy chain.
+  app.set('trust proxy', false);
   app.use(requestId);
+  app.use(rejectOversizedRequestMetadata);
   app.use(helmet({
     contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], baseUri: ["'none'"], frameAncestors: ["'none'"], formAction: ["'none'"] } },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
