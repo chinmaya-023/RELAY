@@ -11,5 +11,8 @@
       "pattern": "relay.rescuevault.in/*",
       "zone_name": "rescuevault.in"
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true
+  }
 }
