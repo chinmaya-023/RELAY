@@ -6,14 +6,5 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
-  },
-  "routes": [
-    {
-      "pattern": "app.example.com/*",
-      "zone_name": "example.com"
-    }
-  ],
-  "observability": {
-    "enabled": true
   }
 }
