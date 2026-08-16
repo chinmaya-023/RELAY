@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relay-frontend",
+  "compatibility_date": "2026-08-17",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "app.example.com/*",
+      "zone_name": "example.com"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
