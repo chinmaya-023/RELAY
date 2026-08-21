@@ -5,6 +5,7 @@ Relay follows a defence-in-depth model. Firebase Authentication owns user creden
 ## Implemented controls
 
 - Email/password users receive a verification email at registration and cannot use the frontend or protected API until the verified Firebase claim is present.
+- Registration, sign-in, and Relay's custom password-reset screen require a 12–128 character password. The managed identity service must enforce the same policy for its hosted email-action pages; Relay's backend rejects password fields so credentials never enter Relay storage or logs.
 - Password recovery uses Firebase’s secure recovery-email flow and returns a uniform user-facing response to reduce account enumeration.
 - Google sign-in uses Firebase’s provider flow, with a redirect fallback when a pop-up is blocked.
 - Browser authentication uses Firebase ID tokens in the `Authorization` header, not ambient cookies. State-changing API requests also validate allowed browser origins as CSRF defence in depth.

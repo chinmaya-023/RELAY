@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assertVerifiedEmail } from '../src/middleware/auth.js';
 import { forwardedRequestHeaders } from '../src/gateway/gatewayHandler.js';
 import { requestId } from '../src/lib/requestId.js';
-import { rejectOversizedRequestMetadata, requireAllowedBrowserOrigin, requireJsonBody } from '../src/middleware/requestSecurity.js';
+import { rejectOversizedRequestMetadata, rejectPasswordFields, requireAllowedBrowserOrigin, requireJsonBody } from '../src/middleware/requestSecurity.js';
 
 const runMiddleware = (middleware, request) => new Promise((resolve) => middleware(request, {}, (error) => resolve(error)));
 
@@ -45,4 +45,11 @@ test('Relay always creates its own request ID instead of accepting a caller-cont
 test('gateway forwarding strips spoofable proxy and Relay-control headers', () => {
   const headers = forwardedRequestHeaders({ authorization: 'Bearer app-token', 'x-forwarded-for': '203.0.113.5', 'x-real-ip': '203.0.113.5', 'x-relay-project-id': 'other-project', 'x-request-id': 'spoofed', host: 'gateway.example', connection: 'keep-alive' });
   assert.deepEqual(headers, { authorization: 'Bearer app-token' });
+});
+
+test('Relay API refuses password fields so passwords cannot enter application storage or logs', async () => {
+  const error = await runMiddleware(rejectPasswordFields, { method: 'POST', body: { newPassword: 'password-that-must-not-reach-relay' } });
+  assert.equal(error.code, 'PASSWORD_FIELD_NOT_ALLOWED');
+  const allowed = await runMiddleware(rejectPasswordFields, { method: 'POST', body: { name: 'Gateway configuration' } });
+  assert.equal(allowed, undefined);
 });

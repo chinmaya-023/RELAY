@@ -51,7 +51,7 @@ From the repository root, `npm install` followed by `npm run dev` starts both wo
 
 Relay uses managed email/password and Google sign-in. Email/password accounts must verify their email address before the frontend or backend grants access. Password recovery uses the identity service's secure, time-limited recovery-email flow; Relay does not create or store its own password-reset codes.
 
-Configure Email/Password and Google in the identity service, set a password policy, enable email-enumeration protection, and authorize every frontend origin that can use sign-in or verification links. For a branded verification experience, set the verification-email template's custom action URL to your frontend's `/auth/action` route. The included page validates the one-time link and then sends the user back to sign in.
+Configure Email/Password and Google in the identity service, enable email-enumeration protection, and authorize every frontend origin that can use sign-in or verification links. In **Security → Authentication → Settings → Password policy**, set the minimum password length to **12**, maximum password length to **128**, and enable enforcement. Set both the **Password reset** and **Verify email** templates' custom action URL to `https://your-frontend-domain/auth/action`. The included page validates the one-time link, enforces the same 12–128 character reset-password policy, and then sends the user back to sign in. Relay deliberately never accepts or stores passwords in its backend API.
 
 ## Monitoring alerts
 

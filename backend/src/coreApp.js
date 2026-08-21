@@ -24,7 +24,7 @@ import { createAdminRouter } from './routes/admin.js';
 import { AccountDeletionService } from './services/accountDeletionService.js';
 import { createAccountRouter } from './routes/account.js';
 import { createGatewayHandler } from './gateway/gatewayHandler.js';
-import { createRateLimitMiddleware, rejectOversizedRequestMetadata, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
+import { createRateLimitMiddleware, rejectOversizedRequestMetadata, rejectPasswordFields, requireAllowedBrowserOrigin, requireJsonBody } from './middleware/requestSecurity.js';
 import { AppError } from './lib/errors.js';
 
 export const createApp = (dependencies = {}) => {
@@ -68,6 +68,7 @@ export const createApp = (dependencies = {}) => {
 
   app.use('/api', express.json({ limit: '1mb' }));
   app.use('/api', (_request, response, next) => { response.set('Cache-Control', 'no-store'); next(); });
+  app.use('/api', rejectPasswordFields);
   app.use('/api', requireJsonBody);
   app.use('/api', createRateLimitMiddleware(apiRateLimiter, env.apiRateLimit, (request) => `api-ip:${request.ip}`));
   app.use('/api', requireAllowedBrowserOrigin(env.clientOrigins));

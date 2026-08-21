@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { applyActionCode, confirmPasswordReset } from 'firebase/auth';
 import { firebaseAuth, firebaseConfigured } from '../firebase.js';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, isRelayPassword } from '../auth/passwordPolicy.js';
 
 const actionParameters = (search) => {
   const values = new URLSearchParams(search);
@@ -32,8 +33,8 @@ export const AuthAction = () => {
 
   const resetPassword = async (event) => {
     event.preventDefault();
-    if (password.length < 12 || password.length > 128) {
-      setError('Use a password between 12 and 128 characters.');
+    if (!isRelayPassword(password)) {
+      setError(`Use a password between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.`);
       return;
     }
     if (password !== passwordConfirmation) {
@@ -69,7 +70,7 @@ export const AuthAction = () => {
       {error && <p className="mt-5 text-sm text-rose-200" role="alert">{error}</p>}
       {canHandle && !isReset && status === 'ready' && <button className="btn-primary mt-7 w-full" onClick={verify}>Verify email</button>}
       {canHandle && !isReset && status === 'working' && <button className="btn-primary mt-7 w-full" disabled>Verifying…</button>}
-      {canHandle && isReset && status === 'ready' && <form className="mt-7 space-y-4" onSubmit={resetPassword}><label className="block"><span className="label">New password</span><input className="field" type="password" autoComplete="new-password" minLength="12" maxLength="128" value={password} onChange={(event) => setPassword(event.target.value)} required /></label><label className="block"><span className="label">Confirm new password</span><input className="field" type="password" autoComplete="new-password" minLength="12" maxLength="128" value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} required /></label><p className="text-xs leading-5 text-slate-500">Use 12–128 characters. Your account password policy may require more.</p><button className="btn-primary w-full">Reset password</button></form>}
+      {canHandle && isReset && status === 'ready' && <form className="mt-7 space-y-4" onSubmit={resetPassword}><label className="block"><span className="label">New password</span><input className="field" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} value={password} onChange={(event) => setPassword(event.target.value)} required /></label><label className="block"><span className="label">Confirm new password</span><input className="field" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} value={passwordConfirmation} onChange={(event) => setPasswordConfirmation(event.target.value)} required /></label><p className="text-xs leading-5 text-slate-500">Use {PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH} characters. Your account password policy may require more.</p><button className="btn-primary w-full">Reset password</button></form>}
       {canHandle && isReset && status === 'working' && <button className="btn-primary mt-7 w-full" disabled>Resetting password…</button>}
       {(status === 'complete' || status === 'failed' || !canHandle) && <Link className="btn-primary mt-7 w-full" to="/login">Return to sign in</Link>}
       <p className="mt-5 text-center text-xs leading-5 text-slate-500">For your security, this confirmation link can be used only once.</p>
